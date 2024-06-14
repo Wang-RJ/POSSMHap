@@ -3,99 +3,113 @@
 import pandas as pd
 import numpy as np
 
-phaseOutput = pd.read_csv("output.trio1.vcf", sep = "\t")
-phaseOutput.columns = ['CHROM', 'POS', 'Mother', 'Father', 'Child']
+class rbPhaseBlock:
+    def __init__(self, phasedDF, muChrom, muPos, dist):
+        self.phase = None
+        
+        distanceMatch = phasedDF['CHROM'] == muChrom
+        positionMatch = phasedDF['POS'].between(muPos - dist, muPos + dist)
+        region = phasedDF[distanceMatch & positionMatch]
 
-mutations = pd.read_csv("dnc_table.txt", sep = "\t")
-
-phase = phaseMutation(mutationPositions.iloc[9,0], mutationPositions.iloc[9,1], 1500)
-
-class phaseBlock:   
-    def __init__(self, phaseVCF, muChrom, muPos, dist):    
-        distanceMatch = phaseVCF['CHROM'] == muChrom
-        positionMatch = phaseVCF['POS'].between(muPos - dist, muPos + dist)
-
-        region = phaseVCF[distanceMatch & positionMatch]
-
-        # find indicator for genotype and blockID for mutation
+        # get genotype and blockID of the mutation
         muIdx = region.index[region['POS'] == muPos]
-        self.muIndicator, self.muBlock = getMutation(region, muIdx)
+        self.muIndicator, muBlock = getMutation(region, muIdx)
         
         # get informative sites for phasing, exclude the mutation itself
         genotypes, phaseArray = splitGenotypeData(region.drop(muIdx))
 
+        # cannot phase if no mutation phase, no genotypes, or no child phases
+        if(muBlock is None
+           or genotypes is None
+           or phaseArray['Child'].isna().all()):
+            self.phase = np.nan
+            return
+
         # include all positions in the region with phase information
-        if self.muBlock is not None and self.muBlock != '.':
-            contained = findContainedPhase(self.muBlock, phaseArray)
-            informative = genotypes[contained]
+        contained   = findContainedPhase(muBlock, phaseArray)
+        informative = genotypes.iloc[contained]
+
+        self.informativeBlocks = { member : splitPhasedInformative(informative[member])
+                                   for member in informative }
+
+    def getPhase(self, minSupport = 1):
+        if self.phase is not None:
+            return self.phase
         else:
-            informative = genotypes
+            self.phase = self.calculatePhase(minSupport)
+            return self.phase
 
-        self.informativeBlocks = [splitPhasedInformative(individual)
-                                  for individual in informative]
-
-    def calculatePhase(self):
+    def calculatePhase(self, minSupport):
+        def flip(dummy):
+            return 1-dummy
+        
         def hamDist(x, y):
             return np.sum(x != y)
 
-        # function to broadcast hamming distance calculation across combinations        
-        def calculateDistances(block1, block2, flag):
+        # broadcast hamming distance calculation across combinations        
+        def distanceMat(block1, block2):
             return np.array(
-                [[hamDist(block1[i], block2[j]) for j in flag]
+                [[hamDist(block1[i], block2[j]) for j in range(2)]
                  for i in range(2)])
         
-        flag = self.muIndicator
-        comp = 0 if flag else 1
-
-        forwardDist    = (calculateDistances(mom, kid, flag),
-                          calculateDistances(dad, kid, flag))
-        complementDist = (calculateDistances(mom, kid, comp),
-                          calculateDistances(dad, kid, comp))
+        # calculate 4 pairwise distances from each parent-child comparison
+        infoB = self.informativeBlocks        
+        matD = distanceMat(infoB['Mother'], infoB['Child'])        
+        patD = distanceMat(infoB['Father'], infoB['Child'])
         
+        # find the minimum distance between parent and child's Left and Right haploblocks
+        # Left:  x|.
+        # Right: .|x
+        nDiffLeft  = abs(min(matD[0,]) - min(patD[0,]))
+        nDiffRight = abs(min(matD[1,]) - min(patD[1,]))
         
-        mom_minid_a = np.argmin(mk_a)
-        dad_minid_a = np.argmin(dk_a)
-
-        mom_minid_b = np.argmin(mk_b)
-        dad_minid_b = np.argmin(dk_b)
+        # someone must meet the minimum number of informative sites to support a haploblock
+        if nDiffLeft < minSupport and nDiffRight < minSupport:
+            return np.nan
         
-        ndiff_a = abs(mk_a.flat[mom_minid_a] - dk_a.flat[dad_minid_a])
-        ndiff_b = abs(mk_b.flat[mom_minid_b] - dk_b.flat[dad_minid_b])
-        
-        if ndiff_a < 1 and ndiff_b < 1:
-            self.phase = np.nan
-
-        if ndiff_a > ndiff_b:
-            if mk_a.flat[mom_minid_a] == 0:
-                self.phase = "F"
-            if dk_a.flat[dad_minid_a] == 0:
-                self.phase = "M"
+        # Left:        x|.             Right:  .|x
+        # muInd == 0:  1|0        muInd == 1:  0|1
+        #
+        # mu indicator matches parents on Left, flip on a Right match
+        if nDiffLeft > nDiffRight:
+            indicator = self.muIndicator
         else:
-            if mk_b.flat[mom_minid_b] == 0:
-                self.phase = "M"
-            if dk_b.flat[dad_minid_b] == 0:
-                self.phase = "F"
+            indicator = flip(self.muIndicator)
+        
+        phaseVals = ['Mother', 'Father']
+        # indicator == 0 defaults to Mother, flip on match to Father
+        # matching haploblock must have 0 distance, otherwise return nan
+        if min(matD[indicator,].flat) == 0:
+            return phaseVals[indicator]
+        elif min(patD[indicator,].flat) == 0:
+            return phaseVals[flip(indicator)]
+        else:
+            return np.nan
 
 # get genotype and block ID for mutation in child from vcf DF
 def getMutation(df, idx):
-    # a phased genotype entry in a vcf has two elements split by a colon
-    geno, block = \
-        df \
-            .loc[idx, 'Child'] \
+    # a phased genotype entry in a vcf has two elements split by a colon   
+    entry = df.loc[idx, 'Child'] \
             .item() \
             .split(':')
+
+    if len(entry) > 1:
+        geno, block = entry[0], entry[1]
+    else:
+        geno, block = entry[0], None
 
     if geno == '1|0':
         ind = 0
     elif geno == '0|1':
         ind = 1
     else:
-        raise Exception("Mutation not associated with any informative sites.")
+        ind = None
         
     return ind, block
 
 def splitGenotypeData(df):
     # utility to split by colon across the array
+    # also clean up phases by replacing "." with None
     def splitColumns(vcfGT):
         genos, phases = pd.DataFrame(), pd.DataFrame()
         
@@ -103,14 +117,16 @@ def splitGenotypeData(df):
             newCols = vcfGT[individual].str.split(':', expand = True)
                 
             genos[individual]  = newCols[0]
-            phases[individual] = newCols[1]
+            phases[individual] = newCols[1] if len(newCols.columns) > 1 else None
         
-        return genos, phases
+        return genos, phases.replace('.', None)
     
-        # split the df and reset the index
-    return splitColumns(df \
-                            .reset_index(drop = True) \
-                            .loc[:, ['Mother', 'Father', 'Child']])
+    # split the df and reset the index
+    if len(df) < 1:
+        return None, None
+    else:
+        return splitColumns(df.reset_index(drop = True) \
+                              .loc[:, ['Mother', 'Father', 'Child']])
 
 # Find idx of all genotypes with *any* phase information across the mutation block.
 # That is, include positions with phase information from either parent if they're
@@ -125,7 +141,7 @@ def findContainedPhase(muBlock, phaseArr):
         notNone   = phaseArr[~phaseArr.isna().all(axis=1)].index
         contained = set(notNone) & set(range(minIdx, maxIdx+1))
     else:
-        contained = set(minIdx)
+        contained = (minIdx,)
 
     return list(contained)
 
@@ -136,11 +152,10 @@ def splitPhasedInformative(genoColumn):
     if (genoColumn == '0/1').sum() < 2:
         genoColumn = genoColumn.replace('0/1', '0|1')
             
-        # Count homozygote genotypes as phase informative
+    # Count homozygote genotypes as phase informative
     genoColumn = genoColumn.replace({
         '1/1': '1|1',
         '0/0': '0|0',
-        '\\.': 'NA|NA'
         }, regex=True)
                 
     genoList  = genoColumn.str.split("|")
