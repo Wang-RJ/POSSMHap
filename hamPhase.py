@@ -5,7 +5,8 @@ import numpy as np
 
 class rbPhaseBlock:
     def __init__(self, phasedDF, muChrom, muPos, dist):
-        self.phase = None
+        # Initialize to empty string
+        self.phase = ''
         
         distanceMatch = phasedDF['CHROM'] == muChrom
         positionMatch = phasedDF['POS'].between(muPos - dist, muPos + dist)
@@ -22,7 +23,7 @@ class rbPhaseBlock:
         if(muBlock is None
            or genotypes is None
            or phaseArray['Child'].isna().all()):
-            self.phase = np.nan
+            self.phase = None
             return
 
         # include all positions in the region with phase information
@@ -33,7 +34,7 @@ class rbPhaseBlock:
                                    for member in informative }
 
     def getPhase(self, minSupport = 1):
-        if self.phase is not None:
+        if self.phase != '':
             return self.phase
         else:
             self.phase = self.calculatePhase(minSupport)
@@ -46,13 +47,14 @@ class rbPhaseBlock:
         def hamDist(x, y):
             return np.sum(x != y)
 
-        # broadcast hamming distance calculation across combinations        
+        # broadcast hamming distance calculation across combinations
         def distanceMat(block1, block2):
             return np.array(
-                [[hamDist(block1[i], block2[j]) for j in range(2)]
-                 for i in range(2)])
+                [[hamDist(block1[i], block2[j]) for i in range(2)]
+                 for j in range(2)])
         
         # calculate 4 pairwise distances from each parent-child comparison
+        # rows correspond to the Left and Right haplotypes in the Child
         infoB = self.informativeBlocks        
         matD = distanceMat(infoB['Mother'], infoB['Child'])        
         patD = distanceMat(infoB['Father'], infoB['Child'])
@@ -65,12 +67,12 @@ class rbPhaseBlock:
         
         # someone must meet the minimum number of informative sites to support a haploblock
         if nDiffLeft < minSupport and nDiffRight < minSupport:
-            return np.nan
+            return None
         
         # Left:        x|.             Right:  .|x
         # muInd == 0:  1|0        muInd == 1:  0|1
         #
-        # mu indicator matches parents on Left, flip on a Right match
+        # mu indicator == 0 matches parent haplotype on Left, flip on a Right match
         if nDiffLeft > nDiffRight:
             indicator = self.muIndicator
         else:
@@ -78,20 +80,21 @@ class rbPhaseBlock:
         
         phaseVals = ['Mother', 'Father']
         # indicator == 0 defaults to Mother, flip on match to Father
-        # matching haploblock must have 0 distance, otherwise return nan
+        # matching haploblock must have 0 distance, otherwise return None
         if min(matD[indicator,].flat) == 0:
             return phaseVals[indicator]
         elif min(patD[indicator,].flat) == 0:
             return phaseVals[flip(indicator)]
         else:
-            return np.nan
+            return None
 
 # get genotype and block ID for mutation in child from vcf DF
 def getMutation(df, idx):
+    if len(df) < 1:
+        return None, None
+    
     # a phased genotype entry in a vcf has two elements split by a colon   
-    entry = df.loc[idx, 'Child'] \
-            .item() \
-            .split(':')
+    entry = df.loc[idx, 'Child'].item().split(':')
 
     if len(entry) > 1:
         geno, block = entry[0], entry[1]
@@ -147,8 +150,8 @@ def findContainedPhase(muBlock, phaseArr):
 
 # split an individual's informative genotypes into an 2-column array
 def splitPhasedInformative(genoColumn):
-    # Single heterozygote only possible when informative site exists in
-    # other parent, this parent can be given an arbitrary phase
+    # Single heterozygote only possible when informative homozygous site exists in
+    # other parent, this parent can then be given an arbitrary phase
     if (genoColumn == '0/1').sum() < 2:
         genoColumn = genoColumn.replace('0/1', '0|1')
             
@@ -156,9 +159,6 @@ def splitPhasedInformative(genoColumn):
     genoColumn = genoColumn.replace({
         '1/1': '1|1',
         '0/0': '0|0',
-        }, regex=True)
+        })
                 
-    genoList  = genoColumn.str.split("|")
-    flattened = [item for sublist in genoList for item in sublist]
-                
-    return np.array(flattened).reshape(-1, 2)
+    return genoColumn.str.split("\\|", expand = True)
