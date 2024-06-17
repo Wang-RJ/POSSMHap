@@ -87,13 +87,13 @@ def calculate_rbPhase(mutBlock, minSupport = 1):
 
     phaseVals = ['Mother', 'Father']
     # indicator == 0 defaults to Mother, flip on match to Father
-    # matching haploblock must have 0 distance, otherwise return None        
+    # matching haploblock must have 0 distance, otherwise return empty string        
     if min(maternalD[indicator,].flat) == 0:
         return phaseVals[indicator]
     elif min(paternalD[indicator,].flat) == 0:
         return phaseVals[flip(indicator)]
     else:
-        return None
+        return ''
 
 # get genotype and block ID for mutation in child from vcf DF
 def getMutation(df, idx):
