@@ -39,7 +39,7 @@ class rbMutationBlock:
         contained = findContainedPhase(mutBlock, phaseArray)
         genotypes = genotypes.iloc[contained]
 
-        # dictionary of informative sites for Mother, Father, and Child
+        # dictionary of informative site arrays (n x 2) for Mother, Father, and Child
         self.informativeSites = { member : makeInformative(genotypes[member])
                                   for member in genotypes }
 
@@ -66,12 +66,16 @@ def calculate_rbPhase(mutBlock, minSupport = 1):
     informative = mutBlock.informativeSites
     maternalD = distanceMat(informative['Mother'], informative['Child'])        
     paternalD = distanceMat(informative['Father'], informative['Child'])
+    
+    if mutBlock.mutSide:
+        maternalD[[0, 1]] = maternalD[[1, 0]]
+        paternalD[[0, 1]] = paternalD[[1, 0]]
         
     # find the difference in the minimum distance between each
     # parent and child's Left, then Right haploblocks
     nDiffLeft  = abs(min(maternalD[0,]) - min(paternalD[0,]))
     nDiffRight = abs(min(maternalD[1,]) - min(paternalD[1,]))
-        
+
     # someone must meet the minimum number of informative sites to support a haploblock
     if nDiffLeft < minSupport and nDiffRight < minSupport:
         return ''
@@ -81,19 +85,24 @@ def calculate_rbPhase(mutBlock, minSupport = 1):
     #
     # mutSide == 0 defaults to Left match, flip on a Right match
     if nDiffLeft > nDiffRight:
-        indicator = mutBlock.mutSide
+        indicator = 0
     else:
-        indicator = flip(mutBlock.mutSide)
+        indicator = 1
 
-    phaseVals = ['Mother', 'Father']
+    phaseVals = ['Maternal', 'Paternal']
+    
     # indicator == 0 defaults to Mother, flip on match to Father
     # matching haploblock must have 0 distance, otherwise return empty string        
     if min(maternalD[indicator,].flat) == 0:
-        return phaseVals[indicator]
+        phase = 0
     elif min(paternalD[indicator,].flat) == 0:
-        return phaseVals[flip(indicator)]
+        phase = 1
     else:
         return ''
+    
+    phase = phase if not indicator else flip(phase)
+
+    return phaseVals[phase]
 
 # get genotype and block ID for mutation in child from vcf DF
 def getMutation(df, idx):
