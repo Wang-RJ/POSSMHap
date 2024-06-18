@@ -75,9 +75,8 @@ def calculate_rbPhase(mutBlock, minSupport = 1):
                 hamDist(informative['Child'][0], informative['Father'][j])
                for i in range(2) for j in range(2)]
     
-    # matching requires difference between two smallest configs to be non-zero
-    configs = configs0 + configs1
-    if sorted(configs)[1] - sorted(configs)[0] < minSupport:
+    # matching requires difference between configs to be non-zero
+    if abs(min(configs1) - min(configs0)) < minSupport:
         return ''
     
     # matching config must have distance 0
