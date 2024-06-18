@@ -46,62 +46,52 @@ class rbMutationBlock:
 def calculate_rbPhase(mutBlock, minSupport = 1):
     if not mutBlock.informativeSites:
         return ''
-    
-    def flip(dummy):
-        return 1-dummy
         
     def hamDist(x, y):
         return np.sum(x != y)
 
-    # broadcast hamming distance calculation across combinations
-    def distanceMat(block1, block2):
-        return np.array(
-            [[hamDist(block1[i], block2[j]) for i in range(2)]
-             for j in range(2)])
-        
-    # calculate 4 pairwise distances from each parent-child comparison
-    # 2x2 matrices, rows correspond to the Left and Right haplotypes in the Child
-    # Left:  x|.
-    # Right: .|x
-    informative = mutBlock.informativeSites
-    maternalD = distanceMat(informative['Mother'], informative['Child'])        
-    paternalD = distanceMat(informative['Father'], informative['Child'])
-    
-    if mutBlock.mutSide:
-        maternalD[[0, 1]] = maternalD[[1, 0]]
-        paternalD[[0, 1]] = paternalD[[1, 0]]
-        
-    # find the difference in the minimum distance between each
-    # parent and child's Left, then Right haploblocks
-    nDiffLeft  = abs(min(maternalD[0,]) - min(paternalD[0,]))
-    nDiffRight = abs(min(maternalD[1,]) - min(paternalD[1,]))
-
-    # someone must meet the minimum number of informative sites to support a haploblock
-    if nDiffLeft < minSupport and nDiffRight < minSupport:
-        return ''
-        
-    # Left:          x|.               Right:  .|x
-    # mutSide == 0:  1|0        mutSide == 1:  0|1
+    # There are 2 haplotypes that a child inherits and we want to find the
+    # configuration of transmitted haplotypes that minimizes the distance between them.
+    # There are 8 pairwise distances between 3 different pairs of haplotypes.
+    # There are also 8 possible configurations from transmission, e.g. no uniparental disomy
     #
-    # mutSide == 0 defaults to Left match, flip on a Right match
-    if nDiffLeft > nDiffRight:
-        indicator = 0
-    else:
-        indicator = 1
-
-    phaseVals = ['Maternal', 'Paternal']
+    # Let C_0 = [c0, c1] be a vector of the child haplotypes and
+    # M = [[m0, m0, m1, m1], [p0, p1, p0, p1]] be a matrix where columns represent
+    # configurations of maternal and paternal haplotype transmission
+    #
+    # C_0 x M, where the hamming distance replaces multiplication between pairs
+    # of elements in the matrix operation, gives a vector of distances for all possible
+    # configurations where c0 is maternally inherited and c1 is paternally inherited
+    # Let C_1 = [c1, c0], then C_1 x M gives the vector of distances for all possible
+    # configurations where c0 is paternally inherited and c1 is maternally inherited
     
-    # indicator == 0 defaults to Mother, flip on match to Father
-    # matching haploblock must have 0 distance, otherwise return empty string        
-    if min(maternalD[indicator,].flat) == 0:
+    # C_0 x M and C_1 x M are calculated below as configs0 and configs1:
+    informative = mutBlock.informativeSites
+    
+    configs0 = [hamDist(informative['Child'][0], informative['Mother'][i]) +
+                hamDist(informative['Child'][1], informative['Father'][j])
+               for i in range(2) for j in range(2)]
+    configs1 = [hamDist(informative['Child'][1], informative['Mother'][i]) +
+                hamDist(informative['Child'][0], informative['Father'][j])
+               for i in range(2) for j in range(2)]
+    
+    # matching requires difference between two smallest configs to be non-zero
+    configs = configs0 + configs1
+    if sorted(configs)[1] - sorted(configs)[0] < minSupport:
+        return ''
+    
+    # matching config must have distance 0
+    if min(configs0) == 0:
         phase = 0
-    elif min(paternalD[indicator,].flat) == 0:
+    elif min(configs1) == 0:
         phase = 1
     else:
         return ''
-    
-    phase = phase if not indicator else flip(phase)
 
+    # flip phase for the mutation if it's on c1 instead of c0
+    phase = (1-phase) if mutBlock.mutConfig else phase
+    
+    phaseVals = ['Maternal', 'Paternal']
     return phaseVals[phase]
 
 # get genotype and block ID for mutation in child from vcf DF
@@ -118,13 +108,13 @@ def getMutation(df, idx):
         geno, block = entry[0], None
 
     if geno == '1|0':
-        ind = 0
+        cfg = 0
     elif geno == '0|1':
-        ind = 1
+        cfg = 1
     else:
-        ind = None
+        cfg = None
         
-    return ind, block
+    return cfg, block
 
 def splitGT(df):
     # utility to split by colon across the array
