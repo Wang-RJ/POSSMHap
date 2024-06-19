@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import rbPhase
+import possmhap
 import pandas as pd
 
 # Import individual read based phases from Whatshap,
@@ -17,18 +17,18 @@ mutations = pd.read_csv("mutations.bed", sep = "\t")
 #   mutPos   - position of mutation
 #   phaseDF  - the phased vcf imported as a pandas dataframe
 
-mublock = rbPhase.rbMutationBlock(10000,
+mublock = possmhap.rbMutationBlock(10000,
                                   mutations.loc[2, 'CHROM'],
                                   mutations.loc[2, 'POS'],
                                   phasedVCF)
 
 # Call calculate_rbphase with the mutation block, returns: 'Mother', 'Father', or ''
-muphase = rbPhase.calculate_rbPhase(mublock)
+muphase = possmhap.calculate_rbPhase(mublock)
 
 # Calculate phase for every mutation using a list of block objects
-phase_blocks = [rbPhase.rbMutationBlock(10000, c, p, phasedVCF) for c, p in
+phase_blocks = [possmhap.rbMutationBlock(10000, c, p, phasedVCF) for c, p in
                  zip(mutations["CHROM"], mutations["POS"])]
-mu_phases = [rbPhase.calculate_rbPhase(block) for block in phase_blocks]
+mu_phases = [possmhap.calculate_rbPhase(block) for block in phase_blocks]
 
 # Print phases wih the positions of the mutations
 print([(mutations.iloc[i].tolist(), x) for i,x in enumerate(mu_phases) if x != ''])
