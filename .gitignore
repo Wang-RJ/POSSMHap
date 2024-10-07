@@ -1,0 +1,5 @@
+# Ignore pycache files
+examples/__pycache__/
+
+# Ignore files to be deleted
+examples/to_delete

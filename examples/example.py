@@ -3,7 +3,7 @@
 # import possmhap
 import pouch
 import pandas as pd
-
+import possmhap
 # Import individual read based phases from Whatshap,
 # Genotypes of the trio must be in order: Mother, Father, Child
 phasedVCF = pd.read_csv("phasedTrio.vcf", comment = '#', sep = "\t",
@@ -28,9 +28,9 @@ muphase = pouch.calculate_rbPhase(mublock)
 print(muphase)
 
 # # Calculate phase for every mutation using a list of block objects
-# phase_blocks = [possmhap.rbMutationBlock(10000, c, p, phasedVCF) for c, p in
-#                  zip(mutations["CHROM"], mutations["POS"])]
-# mu_phases = [possmhap.calculate_rbPhase(block) for block in phase_blocks]
+phase_blocks = [possmhap.rbMutationBlock(10000, c, p, phasedVCF) for c, p in
+                 zip(mutations["CHROM"], mutations["POS"])]
+mu_phases = [possmhap.calculate_rbPhase(block) for block in phase_blocks]
 
-# # Print phases wih the positions of the mutations
-# print([(mutations.iloc[i].tolist(), x) for i,x in enumerate(mu_phases) if x != ''])
+# Print phases wih the positions of the mutations
+print([(mutations.iloc[i].tolist(), x) for i,x in enumerate(mu_phases) if x != ''])
