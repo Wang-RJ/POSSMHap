@@ -15,6 +15,7 @@ class rbMutationBlock:
             self.importDF(phaseDF)
             
     def importDF(self, phaseDF):
+        print("The mutation locus is: ", self.mutLocus)
         mutChrom, mutPos = self.mutLocus
         dist = self.size // 2
         
@@ -41,6 +42,7 @@ class rbMutationBlock:
         # include all positions in the region with phase information
         contained = findContainedPhase(mutBlock, phaseArray)
         genotypes = genotypes.iloc[contained]
+        print("The genotypes are: ", genotypes)
 
         # informative sites are a dict of arrays (n x 2) for keys: Mother, Father, Child
         self.informativeSites = makeInformative(genotypes)
@@ -134,6 +136,7 @@ def findContainedPhase(muBlock, phaseArr):
     if maxIdx > minIdx:
         notNone   = phaseArr[~phaseArr.isna().all(axis=1)].index
         contained = set(notNone) & set(range(minIdx, maxIdx+1))
+        print("The contained set is: ", contained, "around the mutation block: ", muBlock)
     else:
         contained = (minIdx,)
 

@@ -27,10 +27,57 @@ def getMutation(df, idx, individual='Child'):
         geno, block = entry[0], None
 
     if geno == '1|0':
-        cfg = 0
-    elif geno == '0|1':
         cfg = 1
+    elif geno == '0|1':
+        cfg = 0
     else:
         cfg = None
         
     return cfg, block    
+
+
+# Turn each individual's genotypes into an 2-column array of informative sites
+def make_informative_genotypes(genotypes):
+    # Give heterozygotes in parents a phase if it's the only transmittable genotype,
+    # This allows us to phase e.g.,
+    #           Mother    Father    Child
+    #           0/0       0/1         0|1
+    if (genotypes[['Mother','Father']] == '0/1').values.sum() == 1:
+        genotypes = genotypes.replace('0/1', '0|1')
+
+    genotypes = genotypes.replace({
+        '1/1': '1|1',
+        '0/0': '0|0',
+        '0/1': None, 
+        '0/2': None,
+        '2/0': None,
+        '1/2': None,
+        '2/1': None
+        })
+  
+    # Count homozygote genotypes as phase informative, drop unphased heterozygotes
+    genotypes = genotypes.dropna()
+    return genotypes
+
+def make_informative_haplo_blocks(haplo_blocks, genotypes, contained_positions):
+    # for each row in the haploblocks, check if cell is None
+    # if it is, replace with the corresponding genotype
+    
+    parents = ['Mother', 'Father']
+        
+    for i in contained_positions:
+        for j in range(2):
+            # if the cell is None, replace with the corresponding genotype
+            if haplo_blocks[haplo_blocks['POS'] == i][parents[j]] is None:
+                if genotypes[genotypes['POS'] == i][parents[j]] == "0|0" or genotypes[genotypes['POS'] == i][parents[j]] == "1|1":
+                    haplo_blocks[haplo_blocks['POS'] == i][parents[j]] = haplo_blocks[haplo_blocks['POS'] == i]['Child']
+            
+        if haplo_blocks[haplo_blocks['POS'] == i][parents] is None: 
+            if (genotypes[genotypes['POS'] == i][parents] == '0|1').values.sum() == 1:
+                haplo_blocks.loc[haplo_blocks['POS'] == i, 'Mother'] = haplo_blocks.loc[haplo_blocks['POS'] == i, 'Child'].values
+                haplo_blocks.loc[haplo_blocks['POS'] == i, 'Father'] = haplo_blocks[haplo_blocks['POS'] == i]['Child'].values
+    
+    haplo_blocks = haplo_blocks.dropna()
+    return haplo_blocks          
+    
+    
