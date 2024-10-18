@@ -46,34 +46,13 @@ def split_columns(vcf_gt, mut_pos):
     - genos (pd.DataFrame): DataFrame containing genotypes without 'POS' column.
     - phases (pd.DataFrame): DataFrame containing phases without 'POS' column.
     """
-    # Get data at the mutation position
-    mut_row = vcf_gt[vcf_gt['POS'] == mut_pos]
+    
     
     # List of individuals 
     individuals = ['Mother', 'Father', 'Child']
     # Make a copy of the original df
     genotypes_df = vcf_gt.copy()
-    genotypes_df = genotypes_df.set_index('POS', drop=True)
     
-    if not mut_row.empty:
-        # Extract child's genotype and haploblock info at the mutation position
-        child_genotype_info = mut_row['Child'].iloc[0]
-        child_info_parts = child_genotype_info.split(':')
-        child_haploblock = child_info_parts[1] if len(child_info_parts) > 1 else None
-
-        # Fill in missing haploblock info for parents if child has it
-        if child_haploblock and child_haploblock != '.':
-            # Child has haploblock info at the mutation position
-            for parent in ['Mother', 'Father']:
-                parent_genotype_info = mut_row[parent].iloc[0]
-                parent_info_parts = parent_genotype_info.split(':')
-                parent_haploblock = parent_info_parts[1] if len(parent_info_parts) > 1 else None
-
-                if parent_haploblock == '.':
-                    # Assign child's haploblock to parent at the mutation position
-                    vcf_gt.loc[vcf_gt['POS'] == mut_pos, parent] = parent_info_parts[0] + ':' + child_haploblock
-
-
     # Initialize DataFrames for genotypes and haploblocks
     genos = pd.DataFrame()
     phases = pd.DataFrame()
@@ -91,44 +70,76 @@ def split_columns(vcf_gt, mut_pos):
             phases[individual] = split_data[1]
         else:
             phases[individual] = None
+            
+    # Save the old indexing
+    genos_index = genos.index.copy()
+    phases_index = phases.index.copy()
+
+    # Set the index to 'POS' column
+    genotypes_df = genotypes_df.set_index('POS', drop=True)
+    genos = genos.set_index(genotypes_df.index)
+    phases = phases.set_index(genotypes_df.index)
     
-    genos.index = genotypes_df.index
-    phases.index = genotypes_df.index
-    
-    
-    
+    # Go through each row 
     for row in genos.index:
+        # Extract the haploblock and the genotype
         row_genos = genos.loc[row]
-        row_phases = phases.loc[row]
-        
-        update_block = False
+        row_phases = phases.loc[row]    
         
         # Check if haploblock is missing and genotype is homozygous
         for individual in individuals:
-            
-            if row_phases[individual] is not None:
-                continue
-            
-            block_limits = get_min_max_block_index(phases, individual)
-            
-            for b in block_limits:
-                if block_limits[b][0] <= row and row <= block_limits[b][1]:
-                    phases.loc[row, individual] = b
-                    row_phases[individual] = b
-                    
-                    if row_phases[individual] is not None:
-                        if row_genos[individual] in ['0/0', '1/1']:
-                            genos.loc[row, individual] = row_genos[individual].replace('/', '|')
-                            # Find the phase block ID that contains the mutation position
-            
-                        if row_genos["Father"] in ['0/1', '1/0'] and not (row_genos["Mother"] in ['0/1', '1/0']):
-                            genos.loc[row, "Father"] = row_genos["Father"].replace('/', '|')
-                            genos.loc[row, "Mother"] = row_genos["Mother"].replace('/', '|')
-                    # Find the phase block ID that contains the mutation position
-                    break
+            if (row_phases[individual] is None) or (row_phases[individual] == '.'):
 
+                # Find the limits of the blocks contained within the individual phases dataframe
+                block_limits = get_min_max_block_index(phases, individual)
+                
+                # Go through each block
+                for b in block_limits:
+                    # if we find the block that contains the current position
+                    if block_limits[b][0] <= row and row <= block_limits[b][1]:
+                        # Assign the haplopblock to the row
+                        phases.loc[row, individual] = b
+                        row_phases[individual] = b                   
+                        
+                        # If the haploblock at this row NOT missing
+                        if row_phases[individual] is not None:
+                            
+                            # If the genotype is homozygous, replace '/' with '|'
+                            if row_genos[individual] in ['0/0', '1/1']:
+                                genos.loc[row, individual] = row_genos[individual].replace('/', '|')
+                                
+                            # If the genotype is heterozygous and the other parent has a haploblock, replace '/' with '|'            
+                            if (row_genos["Father"] in ['0/1', '1/0'])and (not (row_genos["Mother"] in ['0/1', '1/0'])):
+                                genos.loc[row, "Father"] = row_genos["Father"].replace('/', '|')
+                                genos.loc[row, "Mother"] = row_genos["Mother"].replace('/', '|')
+                            elif (row_genos["Father"] not in ['0/1', '1/0'])and ((row_genos["Mother"] in ['0/1', '1/0'])):
+                                genos.loc[row, "Father"] = row_genos["Father"].replace('/', '|')
+                                genos.loc[row, "Mother"] = row_genos["Mother"].replace('/', '|')
     # Replace '.' in phases with None
     phases.replace('.', None, inplace=True)
+
+    # Assign the mutation position
+    mut_row = phases.loc[mut_pos]
+    
+    # Final fix, if at the haploblock containing the dnm, the parents have no haploblock, assign the child's haploblock to the parents
+    if mut_row['Father'] == '.' or mut_row['Mother'] == '.':
+       
+        # Extract child's genotype and haploblock info at the mutation position
+        child_haploblock = mut_row['Child']
+        
+        # Fill in missing haploblock info for parents if child has it
+        if child_haploblock or child_haploblock != '.':
+            # Child has haploblock info at the mutation position
+            for parent in ['Mother', 'Father']:
+                parent_haploblock = mut_row[parent]
+                
+                if parent_haploblock == '.':
+                    # Assign child's haploblock to parent at the mutation position
+                    phases.loc[mut_pos, parent] = child_haploblock
+
+    # Return the original indexing
+    genos.index = genos_index
+    phases.index = phases_index
 
     return genos, phases
 
@@ -179,26 +190,25 @@ def get_min_max_block_index(phases_df, individual):
 #     return phases_df, genos_df
         
 ## =================================================================================================
-# Sample data
-data = {
-    'Chromosome': ['JAKFHU010000160.1'] * 5,
-    'POS': [14494647, 14494743, 14494760, 14495245, 14495569],
-    'Mother': ['0/0:.', '0/0', '0/0:.', '0/0:.', '0/0:.'],
-    'Father': ['0|1:14494647', '0/0', '0|1:14494647', '0|1:14494647', '0|1:14494647'],
-    'Child': ['0/0:.', '0/0', '0/0:.', '0/0:.', '0/0:.']
-}
+# # Sample data
+# data = {
+#     'Chromosome': ['JAKFHU010000160.1'] * 5,
+#     'POS': [14494647, 14494743, 14494760, 14495245, 14495569],
+#     'Mother': ['0/0:.', '0/0', '0/0:.', '0/0:.', '0/0:.'],
+#     'Father': ['0|1:14494647', '0/0', '0|1:14494647', '0|1:14494647', '0|1:14494647'],
+#     'Child': ['0/0:.', '0/0:14494648', '0/0:.', '0/0:.', '0/0:.']
+# }
 
-vcf_gt = pd.DataFrame(data)
-print("Input DataFrame:")
-print(vcf_gt)
-# Mutation position
-mut_pos = 14494743
+# vcf_gt = pd.DataFrame(data)
+# print("Input DataFrame:")
+# print(vcf_gt)
+# # Mutation position
+# mut_pos = 14494743
 
 
-
-print("Split GT:")
-genos, phases = splitGT(vcf_gt, mut_pos)
-print("Genotypes:")
-print(genos)
-print("\nPhases:")
-print(phases)
+# print("Split GT:")
+# genos, phases = splitGT(vcf_gt, mut_pos)
+# print("Genotypes:")
+# print(genos)
+# print("\nPhases:")
+# print(phases)
