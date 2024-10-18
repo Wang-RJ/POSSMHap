@@ -64,6 +64,7 @@ class RbMutationBlock:
         
         if mut_block_id is None:
             logger.debug("Mutation block ID for the Child is None. Exiting import.")
+            self.phase = "Missing DNM block"
             return
         
         # Step 3: Identify haploblocks
@@ -72,9 +73,9 @@ class RbMutationBlock:
         self.genotypes = genotypes
         self.haplo_blocks = haplo_blocks
         
-        logger.info(f"Mutation at {self.mut_locus}")
-        logger.info(f"Genotypes \n{genotypes}")
-        logger.info(f"Haploblocks \n{haplo_blocks}")
+        logger.debug(f"Mutation at {self.mut_locus}")
+        logger.debug(f"Genotypes \n{genotypes}")
+        logger.debug(f"Haploblocks \n{haplo_blocks}")
         
         # Step 4 : Find individual with the longest haploblock
         longest_individual, longest_block_id = self._find_longest_block(mut_block_id)
@@ -90,7 +91,6 @@ class RbMutationBlock:
         if genotypes is None or haplo_blocks['Child'].isna().all():
             logger.debug(f"Missing haploblocks for {self.mut_locus} for the Child. Exiting import.")
             return
-        
     
         # Step 6: Perform phasing
         self._perform_phasing(mut_block_id, region)
@@ -261,6 +261,9 @@ class RbMutationBlock:
 
         # ## Method 3: Attempt block chaining method
         logger.info("Method 3: Attempt block chaining method")
+        print("Longest individual is: ", longest_individual)
+        print("Haplo blocks info is: ", haplo_blocks_info)
+        print("Mutation configuration is: ", self.mut_config)
         phase = self._attempt_block_chaining(longest_individual, haplo_blocks_info, self.mut_config)
         if phase is not None:
             self.phase = self._get_explicit_phase(phase)
@@ -685,7 +688,6 @@ class RbMutationBlock:
             parent_blocks = [b for b in parent_blocks if not b.contains_mutation]
             parent_blocks.sort(key=lambda x: x.size, reverse=True)
             parent_blockdnm = haplo_info['Father']['dnm_block']
-            # print("Longest individual is Child")
             
             while len(parent_blocks) >= 1:
                 parent_block1 = parent_blocks.pop(0) 
@@ -934,66 +936,63 @@ if __name__ == "__main__":
 
 
 #     ##  Case 5.3: Child has the longest blockm expected DNM from mum
-    with open("examples/phasedTrio_1.vcf", 'w') as f:
-        f.write("#CHROM\tPOS\t100949\t100934\t100947\n")
-        f.write("JAKFHU010000086.1\t110\t0|0:3\t0|0:6\t0|1:1\n")
-        f.write("JAKFHU010000086.1\t111\t0|1:3\t0|1:6\t0|1:1\n")
-        f.write("JAKFHU010000086.1\t113\t0|1:4\t1|0:6\t1|0:2\n")
-        f.write("JAKFHU010000086.1\t115\t0|1:5\t1|1:6\t1|0:2\n")
+    # with open("examples/phasedTrio_1.vcf", 'w') as f:
+    #     f.write("#CHROM\tPOS\t100949\t100934\t100947\n")
+    #     f.write("JAKFHU010000086.1\t110\t0|0:3\t0|0:6\t0|1:1\n")
+    #     f.write("JAKFHU010000086.1\t111\t0|1:3\t0|1:6\t0|1:1\n")
+    #     f.write("JAKFHU010000086.1\t113\t0|1:4\t1|0:6\t1|0:2\n")
+    #     f.write("JAKFHU010000086.1\t115\t0|1:5\t1|1:6\t1|0:2\n")
 
-    # ## Genotypes of the trio must be in order: Mother, Father, Child
-    phasedVCF = pd.read_csv(
-        "examples/phasedTrio_1.vcf",
-        comment='#',
-        sep="\t",
-        names=['CHROM', 'POS', 'Mother', 'Father', 'Child']
-    )
-
-    # # Mutation positions in bed format
-    mutations = pd.read_csv("examples/mutations_1.bed", sep="\t")
-
-    ## Form an rbMutationBlock
-    print(mutations.loc[0, "CHROM"], mutations.loc[0, "POS"])
-
-    mublock = RbMutationBlock(
-        10000,
-        mutations.loc[0, 'CHROM'],
-        mutations.loc[0, 'POS'],
-        phasedVCF
-    )
-
-    print(mublock.mut_locus)
-    print(mublock.phase)
-    print(mublock.phase_method)
-    
-    
-    
-    # Main data
-    # ----------------------------------------------------------------------------------------- #
-    # Import individual read-based phases from Whatshap
-    # phased_vcf = pd.read_csv(
-    #     "examples/phasedTrio.vcf",
+    # # ## Genotypes of the trio must be in order: Mother, Father, Child
+    # phasedVCF = pd.read_csv(
+    #     "examples/phasedTrio_1.vcf",
     #     comment='#',
     #     sep="\t",
     #     names=['CHROM', 'POS', 'Mother', 'Father', 'Child']
     # )
 
     # # # Mutation positions in bed format
-    # mutations = pd.read_csv("examples/mutations.bed", sep="\t")
-    
-    ## ----------------------------------------------------------------------------------------- #
-    # Test on one mutation
-    # k = 70
-    # ck = RbMutationBlock(10000,
-    #                         mutations.loc[k, 'CHROM'],
-    #                         mutations.loc[k, 'POS'],
-    #                         phased_vcf)
+    # mutations = pd.read_csv("examples/mutations_1.bed", sep="\t")
 
-    # # # Check position 32, 12, 79, 70
-    # print(ck.mut_locus)
-    # print(ck.phase)
-    # print(ck.phase_method)
-    # print(ck.mut_config)
+    # ## Form an rbMutationBlock
+    # print(mutations.loc[0, "CHROM"], mutations.loc[0, "POS"])
+
+    # mublock = RbMutationBlock(
+    #     10000,
+    #     mutations.loc[0, 'CHROM'],
+    #     mutations.loc[0, 'POS'],
+    #     phasedVCF
+    # )
+
+    # print(mublock.mut_locus)
+    # print(mublock.phase)
+    # print(mublock.phase_method)
+    
+    
+    
+    # Main data
+    # ----------------------------------------------------------------------------------------- #
+    # Import individual read-based phases from Whatshap
+    phased_vcf = pd.read_csv(
+        "examples/phasedTrio.vcf",
+        comment='#',
+        sep="\t",
+        names=['CHROM', 'POS', 'Mother', 'Father', 'Child']
+    )
+
+    # # Mutation positions in bed format
+    mutations = pd.read_csv("examples/mutations.bed", sep="\t")
+    
+    # ## ----------------------------------------------------------------------------------------- #
+    # Test on one mutation
+    k = 8
+    ck = RbMutationBlock(10000,
+                            mutations.loc[k, 'CHROM'],
+                            mutations.loc[k, 'POS'],
+                            phased_vcf)
+
+    # # Check position 32, 12, 79, 70, 8
+
 
     # ## ----------------------------------------------------------------------------------------- #
     # # # Calculate phase for every mutation
@@ -1005,10 +1004,21 @@ if __name__ == "__main__":
     # # Extract phases
     # mu_phases = [
     #     (block.mut_locus, block.phase, block.phase_method)
-    #     for block in phase_blocks if block.phase is not None
+    #     for block in phase_blocks if block.phase in ["Maternal", "Paternal"]
+    # ]
+    
+    # not_phased = [
+    #     (block.mut_locus, block.phase, block.phase_method)
+    #     for block in phase_blocks if block.phase not in ["Maternal", "Paternal"]
     # ]
 
     # print("Phased Mutations:")
     # for locus, phase, method in mu_phases:
     #     print(f"Mutation at {locus}: Phase - {phase}, Method - {method}")
     # print(f"Number of mutations phased: {len(mu_phases)}")
+    
+    # print("Not Phased Mutations:")
+    # for locus, phase, method in not_phased:
+    #     print(f"Mutation at {locus}: Phase - {phase}, Method - {method}")
+        
+    # print(f"Number of mutations not phased: {len(not_phased)}")
