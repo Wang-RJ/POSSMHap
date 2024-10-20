@@ -97,6 +97,7 @@ def split_columns(vcf_gt, mut_pos):
                 for b in block_limits:
                     # if we find the block that contains the current position
                     if block_limits[b][0] <= row and row <= block_limits[b][1]:
+                        
                         # Assign the haplopblock to the row
                         phases.loc[row, individual] = b
                         row_phases[individual] = b                   
