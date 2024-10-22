@@ -1014,14 +1014,14 @@ if __name__ == "__main__":
     # ----------------------------------------------------------------------------------------- #
     # Import individual read-based phases from Whatshap
     phased_vcf = pd.read_csv(
-        "examples/phasedTrio.vcf",
+        "examples/phasedTrio_test2.vcf",
         comment='#',
         sep="\t",
         names=['CHROM', 'POS', 'Mother', 'Father', 'Child']
     )
 
     # # Mutation positions in bed format
-    mutations = pd.read_csv("examples/mutations.bed", sep="\t")
+    mutations = pd.read_csv("examples/mutations2.bed", sep="\t")
     
     # # ## ----------------------------------------------------------------------------------------- #
     # # Test on one mutation
