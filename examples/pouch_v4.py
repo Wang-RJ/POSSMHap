@@ -60,6 +60,7 @@ class RbMutationBlock:
         
         # Step 1: Filter the region around the mutation
         region = self._filter_region(phase_df)
+        # region.to_csv("before_df.csv", sep="\t", index=False)
 
         # Step 2: Extract mutation configuration
         self.mut_config, mut_block_id = self._extract_mutation_config(region)
@@ -74,14 +75,13 @@ class RbMutationBlock:
         # Step 3.1 : Update the genotypes and haploblocks
         self.genotypes = genotypes
         self.haplo_blocks = haplo_blocks
-        
         logger.debug(f"Mutation at {self.mut_locus}")
         logger.debug(f"Genotypes \n{genotypes}")
         logger.debug(f"Haploblocks \n{haplo_blocks}")
-        logger.info(f"Input data {region}")
+        logger.debug(f"Input data {region}")
         
         # Step 4 : Find individual with the longest haploblock
-        longest_individual, longest_block_id = self._find_longest_block(mut_block_id)\
+        # longest_individual, longest_block_id = self._find_longest_block(mut_block_id)
             
         # Step 4: Identify haploblocks for the trio
         genotypes_unrestricted, haplo_blocks_unrestricted = self._identify_haploblocks(region, only_mut=False, longest_individual=None)
@@ -98,6 +98,29 @@ class RbMutationBlock:
         # Step 6: Perform phasing
         self._perform_phasing(mut_block_id, region)
 
+    # def _filter_region(self, phase_df):
+    #     """
+    #     Filter the DataFrame to include only the region around the mutation.
+
+    #     Parameters:
+    #     - phase_df (pd.DataFrame): DataFrame containing phased genotypes.
+
+    #     Returns:
+    #     - pd.DataFrame: Filtered DataFrame.
+    #     """
+    #     mut_chrom, mut_pos = self.mut_locus
+    #     half_size = self.size // 2
+    #     distance_match = phase_df['CHROM'] == mut_chrom
+    #     position_match = phase_df['POS'].between(mut_pos - half_size, mut_pos + half_size)
+    #     region = phase_df[distance_match & position_match]
+        
+    #     mutpos_match = region["POS"] == mut_pos
+    #     # If there is no haplotype associated with the mutation, fill it in
+    #     if region[mutpos_match]["Child"].str.split(":", expand=True)[1].values[0] == ".":
+    #         # Ensure "Child" column is properly modified by splitting and appending ":MUT_BLOCK"
+    #         region.loc[mutpos_match, "Child"] = region.loc[mutpos_match, "Child"].apply(lambda x: x.split(":")[0] + ":MUT_BLOCK")
+    #     return region
+
     def _filter_region(self, phase_df):
         """
         Filter the DataFrame to include only the region around the mutation.
@@ -113,6 +136,30 @@ class RbMutationBlock:
         distance_match = phase_df['CHROM'] == mut_chrom
         position_match = phase_df['POS'].between(mut_pos - half_size, mut_pos + half_size)
         region = phase_df[distance_match & position_match]
+
+        mutpos_match = region["POS"] == mut_pos
+        
+        # If there is no haplotype associated with the mutation, fill it in
+        if region[mutpos_match]["Child"].str.split(":", expand=True)[1].values[0] == ".":
+            region.loc[mutpos_match, "Child"] = region.loc[mutpos_match, "Child"].apply(lambda x: x.split(":")[0] + ":MUT_BLOCK")
+
+        # Get the index of the row with mut_pos
+        mutpos_index = region.index[region["POS"] == mut_pos].tolist()
+        
+        # Check for adjacent rows
+        if mutpos_index:
+            # Check the previous row if it exists and genotype is "0/0" or "1/1"
+            if mutpos_index[0] - 1 in region.index:
+                prev_index = mutpos_index[0] - 1
+                if region.loc[prev_index, "Child"].split(":")[0] in ["0/0", "1/1"]:
+                    region.at[prev_index, "Child"] = region.loc[prev_index, "Child"].split(":")[0] + ":MUT_BLOCK"
+            
+            # Check the next row if it exists and genotype is "0/0" or "1/1"
+            if mutpos_index[0] + 1 in region.index:
+                next_index = mutpos_index[0] + 1
+                if region.loc[next_index, "Child"].split(":")[0] in ["0/0", "1/1"]:
+                    region.at[next_index, "Child"] = region.loc[next_index, "Child"].split(":")[0] + ":MUT_BLOCK"
+                    
         return region
 
     def _extract_mutation_config(self, region):
@@ -127,7 +174,13 @@ class RbMutationBlock:
         """
         mut_chrom, mut_pos = self.mut_locus
         mut_idx = region.index[region['POS'] == mut_pos]
-        mut_config, mut_block_id = getMutation(region, mut_idx)
+        if '0/1' in region.loc[mut_idx, "Child"].values[0]:
+            mut_config = 0
+        elif '1/0' in region.loc[mut_idx, "Child"].values[0]:
+            mut_config = 1
+        mut_config2, mut_block_id = getMutation(region, mut_idx)
+        if mut_config2 is not None:
+            return mut_config2, mut_block_id            
         return mut_config, mut_block_id
 
     def _identify_haploblocks(self, region, only_mut=True, longest_individual=None):
@@ -146,6 +199,9 @@ class RbMutationBlock:
         """
         mut_pos = self.mut_locus[1]
         genotypes, haplo_blocks = splitGT(region, mut_pos)
+        print("After splitGT")
+        print(genotypes)
+        print(haplo_blocks)
         
         # Find the block containing the mutation in the child
         # Get the contained phase around the mutation block
@@ -159,11 +215,18 @@ class RbMutationBlock:
         haplo_blocks = haplo_blocks[haplo_blocks["POS"].isin(contained_positions)]
         
         # Make informative genotypes and haploblocks
-        genotypes = make_informative_genotypes(genotypes)
+        genotypes = make_informative_genotypes(genotypes, self.mut_locus[1])
         
         # Take all the positions in the haploblocks if there exist at least one non NaN value (any=False), otherwise take only the informative haploblocks
         any = False if longest_individual is None else True
         haplo_blocks = make_informative_haplo_blocks(haplo_blocks, genotypes, contained_positions, any=any) # Not to make the haploblocks informative        
+        
+        # Save final informative genotypes and haplo_blocks for debugging
+        # Merge genotypes and haplo_blocks on the "POS" column
+        merged_df = pd.merge(genotypes, haplo_blocks, on="POS", suffixes=("_genotype", "_haploblock"))
+        
+        # Save final merged DataFrame with tab delimiter
+        # merged_df.to_csv("merged_genotypes_haploblocks_temp.csv", sep="\t", index=False)
         return genotypes, haplo_blocks
 
     def _find_contained_phase(self, haplo_blocks, longest_individual="Child"):
@@ -283,7 +346,7 @@ class RbMutationBlock:
         """
         def hamming_distance(x, y):
             return np.sum(x != y)
-       
+        print(sum(mother_alleles[0] == child_other_hap), sum(father_alleles[1] == child_mut_hap))
         configurations = {
             'maternal': [hamming_distance(child_mut_hap, mother_alleles[i]) + hamming_distance(child_other_hap, father_alleles[j]) for i in range(2) for j in range(2)],
             'paternal': [hamming_distance(child_other_hap, mother_alleles[i]) + hamming_distance(child_mut_hap, father_alleles[j]) for i in range(2) for j in range(2)]
@@ -305,7 +368,8 @@ class RbMutationBlock:
         """
         maternal_distance = distances['maternal']
         paternal_distance = distances['paternal']
-
+        print(f"maternal_distance{maternal_distance}")
+        print(f"paternal_distance{paternal_distance}")
         if abs(np.min(maternal_distance) - np.min(paternal_distance)) < min_support:
             logger.debug("Ambiguous phasing due to small difference in distances.")
             return None
@@ -334,7 +398,7 @@ class RbMutationBlock:
         """
         haplo_blocks = self.haplo_blocks
         mut_pos = self.mut_locus[1]
-
+        print(haplo_blocks[haplo_blocks['POS'] == mut_pos]['Child'])
         # Get haploblock IDs at the mutation position
         haplo_blk_child = haplo_blocks[haplo_blocks['POS'] == mut_pos]['Child'].values[0]
         haplo_blk_father = haplo_blocks[haplo_blocks['POS'] == mut_pos]['Father'].values[0]
@@ -453,10 +517,22 @@ class RbMutationBlock:
         
         if genotypes.empty:
             return None
+
         # Extract haplotypes
-        mother_alleles = genotypes['Mother'].str.split('|', expand=True).astype(int)
-        father_alleles = genotypes['Father'].str.split('|', expand=True).astype(int)
-        child_alleles = genotypes['Child'].str.split('|', expand=True).astype(int)
+        # Columns to process
+        columns_to_check = ['Mother', 'Father', 'Child']
+
+        # Filter rows where all values in 'Mother', 'Father', and 'Child' are either '0' or '1'
+        filtered_genotypes = genotypes.loc[
+            genotypes[columns_to_check].apply(
+                lambda col: col.str.split('|', expand=True).apply(lambda x: x.isin(['0', '1']).all(), axis=1)
+            ).all(axis=1)
+        ]
+        
+    
+        mother_alleles = filtered_genotypes['Mother'].str.split('|', expand=True).astype(int)
+        father_alleles = filtered_genotypes['Father'].str.split('|', expand=True).astype(int)
+        child_alleles = filtered_genotypes['Child'].str.split('|', expand=True).astype(int)
 
         # Determine which haplotype carries the mutation
         if self.mut_config == 1:
@@ -478,7 +554,7 @@ class RbMutationBlock:
             mother_alleles=mother_alleles, father_alleles=father_alleles
         )
             
-        # print("Distances are: ", distances)
+        print("Distances are: ", distances)
         phase = self._decide_phase(distances, 1, 1, mutation_on_c0)
         return phase
 
@@ -664,11 +740,10 @@ class RbMutationBlock:
                         all_phases.append(phase)
                     else: 
                         all_phases.append(1000)
-        
+
         # Decide all the phases
         if 0 in all_phases and 1 in all_phases:
             return 
-        
         if 1 in all_phases and all_phases.count(0) == 0:
             return 1
         if 0 in all_phases and all_phases.count(1) == 0:
@@ -1014,14 +1089,15 @@ if __name__ == "__main__":
     # ----------------------------------------------------------------------------------------- #
     # Import individual read-based phases from Whatshap
     phased_vcf = pd.read_csv(
-        "examples/phasedTrio_test2.vcf",
+        "examples/test.vcf",
         comment='#',
         sep="\t",
-        names=['CHROM', 'POS', 'Mother', 'Father', 'Child']
+        # names=['CHROM', 'POS', 'Mother', 'Father', 'Child']
+        names = ['CHROM', 'POS', 'Child', 'Father', 'Mother']
     )
 
     # # Mutation positions in bed format
-    mutations = pd.read_csv("examples/mutations2.bed", sep="\t")
+    mutations = pd.read_csv("examples/mutations_testvcf.bed", sep="\t")
     
     # # ## ----------------------------------------------------------------------------------------- #
     # # Test on one mutation

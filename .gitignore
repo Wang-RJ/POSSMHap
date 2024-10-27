@@ -3,3 +3,9 @@ examples/__pycache__/
 
 # Ignore files to be deleted
 examples/to_delete
+
+## Ignore slurm outputs
+slurm_output/*
+
+## Ignore slurm scripts
+*.script

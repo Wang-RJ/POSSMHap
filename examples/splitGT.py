@@ -47,7 +47,6 @@ def split_columns(vcf_gt, mut_pos):
     - phases (pd.DataFrame): DataFrame containing phases without 'POS' column.
     """
     
-    
     # List of individuals 
     individuals = ['Mother', 'Father', 'Child']
     # Make a copy of the original df
@@ -61,8 +60,6 @@ def split_columns(vcf_gt, mut_pos):
     for individual in individuals:
         # Split by ':'
         split_data = genotypes_df[individual].str.split(':', expand=True)
-        
-        # First part is genotype
         genos[individual] = split_data[0]
         
         # Second part is phase block ID (if it exists)
@@ -97,10 +94,7 @@ def split_columns(vcf_gt, mut_pos):
                 for b in block_limits:
                     # if we find the block that contains the current position
                     if block_limits[b][0] <= row and row <= block_limits[b][1]:
-                        
-                        # Assign the haplopblock to the row
-                        phases.loc[row, individual] = b
-                        row_phases[individual] = b                   
+                                         
                         
                         # If the haploblock at this row NOT missing
                         if row_phases[individual] is not None:
@@ -108,14 +102,17 @@ def split_columns(vcf_gt, mut_pos):
                             # If the genotype is homozygous, replace '/' with '|'
                             if row_genos[individual] in ['0/0', '1/1']:
                                 genos.loc[row, individual] = row_genos[individual].replace('/', '|')
+                                # Assign the haplopblock to the row
+                                phases.loc[row, individual] = b
+                                row_phases[individual] = b  
                                 
                             # If the genotype is heterozygous and the other parent has a haploblock, replace '/' with '|'            
-                            if (row_genos["Father"] in ['0/1', '1/0'])and (not (row_genos["Mother"] in ['0/1', '1/0'])):
-                                genos.loc[row, "Father"] = row_genos["Father"].replace('/', '|')
-                                genos.loc[row, "Mother"] = row_genos["Mother"].replace('/', '|')
-                            elif (row_genos["Father"] not in ['0/1', '1/0'])and ((row_genos["Mother"] in ['0/1', '1/0'])):
-                                genos.loc[row, "Father"] = row_genos["Father"].replace('/', '|')
-                                genos.loc[row, "Mother"] = row_genos["Mother"].replace('/', '|')
+                            # if (row_genos["Father"] in ['0/1', '1/0'])and (not (row_genos["Mother"] in ['0/1', '1/0'])):
+                            #     genos.loc[row, "Father"] = row_genos["Father"].replace('/', '|')
+                            #     genos.loc[row, "Mother"] = row_genos["Mother"].replace('/', '|')
+                            # elif (row_genos["Father"] not in ['0/1', '1/0'])and ((row_genos["Mother"] in ['0/1', '1/0'])):
+                            #     genos.loc[row, "Father"] = row_genos["Father"].replace('/', '|')
+                            #     genos.loc[row, "Mother"] = row_genos["Mother"].replace('/', '|')
     # Replace '.' in phases with None
     phases.replace('.', None, inplace=True)
 
