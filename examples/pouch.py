@@ -6,6 +6,8 @@ from getMutation import getMutation, make_informative_genotypes, make_informativ
 from splitGT import splitGT
 from concatenate import generate_super_matrices
 
+## Update 10/26/2024 - ver 4.
+
 # Suppress pandas warnings
 pd.options.mode.chained_assignment = None
 
@@ -98,29 +100,7 @@ class RbMutationBlock:
         # Step 6: Perform phasing
         self._perform_phasing(mut_block_id, region)
 
-    # def _filter_region(self, phase_df):
-    #     """
-    #     Filter the DataFrame to include only the region around the mutation.
-
-    #     Parameters:
-    #     - phase_df (pd.DataFrame): DataFrame containing phased genotypes.
-
-    #     Returns:
-    #     - pd.DataFrame: Filtered DataFrame.
-    #     """
-    #     mut_chrom, mut_pos = self.mut_locus
-    #     half_size = self.size // 2
-    #     distance_match = phase_df['CHROM'] == mut_chrom
-    #     position_match = phase_df['POS'].between(mut_pos - half_size, mut_pos + half_size)
-    #     region = phase_df[distance_match & position_match]
-        
-    #     mutpos_match = region["POS"] == mut_pos
-    #     # If there is no haplotype associated with the mutation, fill it in
-    #     if region[mutpos_match]["Child"].str.split(":", expand=True)[1].values[0] == ".":
-    #         # Ensure "Child" column is properly modified by splitting and appending ":MUT_BLOCK"
-    #         region.loc[mutpos_match, "Child"] = region.loc[mutpos_match, "Child"].apply(lambda x: x.split(":")[0] + ":MUT_BLOCK")
-    #     return region
-
+    
     def _filter_region(self, phase_df):
         """
         Filter the DataFrame to include only the region around the mutation.
@@ -749,220 +729,6 @@ class RbMutationBlock:
         if 0 in all_phases and all_phases.count(1) == 0:
             return 0
         return None
-            
-                    
-    # def _combine_blocks_and_phase(self, longestblock, block1, block2, combine_individual=None, mutation_on_c0=None):
-    #     """
-    #     Combine two haploblocks and attempt phasing.
-
-    #     Parameters:
-    #     - block1 (HaplotypeBlock): First haploblock, containing the dnm
-    #     - block2 (HaplotypeBlock): Second haploblock.
-
-    #     Returns:
-    #     - int or None: Phase value.
-    #     """
-    #     combined_positions = sorted(set(block1.positions + block2.positions + longestblock.positions))
- 
-    #     # genotypes = self.genotypes[self.genotypes['POS'] != self.mut_locus[1]]
-    #     genotypes = self.genotypes_unrestricted[self.genotypes_unrestricted['POS'] != self.mut_locus[1]]
-    #     genotypes = genotypes[genotypes['POS'].isin(combined_positions)]
-
-    #     if genotypes.empty:
-    #         return None
-
-    #     # Extract haplotypes
-    #     hap1_alleles = genotypes.loc[genotypes["POS"].isin(block1.positions)][block1.individual].str.split('|', expand=True).astype(int)
-    #     hap2_alleles = genotypes.loc[genotypes["POS"].isin(block2.positions)][block2.individual].str.split('|', expand=True).astype(int)
-
-    #     if hap1_alleles.empty or hap2_alleles.empty:
-    #         return
-    #     # Combine haplotypes
-    #     if block1.start < block2.start:
-    #         combined_hap0 = np.concatenate((hap1_alleles[0], hap2_alleles[0]))
-    #         combined_hap1 = np.concatenate((hap1_alleles[1], hap2_alleles[1]))
-    #         combined_hap2 = np.concatenate((hap1_alleles[0], hap2_alleles[1]))
-    #         combined_hap3 = np.concatenate((hap1_alleles[1], hap2_alleles[0]))
-            
-    #     else:
-    #         combined_hap0 = np.concatenate((hap2_alleles[0], hap1_alleles[0]))
-    #         combined_hap1 = np.concatenate((hap2_alleles[1], hap1_alleles[1]))
-    #         combined_hap2 = np.concatenate((hap2_alleles[1], hap1_alleles[0]))
-    #         combined_hap3 = np.concatenate((hap2_alleles[0], hap1_alleles[1]))
-            
-    #     # Extract the genotypes of the reference individual
-    #     # Filter out the mutation position
-    #     longest_alleles = genotypes[longestblock.individual].str.split('|', expand=True).astype(int)
-    #     longest_hap0 = longest_alleles[0]
-    #     longest_hap1 = longest_alleles[1]
-
-    #     # Attempt phasing
-    #     phase1 = self._matrix_phasing(combined_hap0, combined_hap1, longest_hap0, longest_hap1, longestblock.individual, combine_individual, mutation_on_c0)
-    #     phase2 = self._matrix_phasing(combined_hap2, combined_hap3, longest_hap0, longest_hap1, longestblock.individual, combine_individual, mutation_on_c0)
-        
-    #     # Collect valid phases
-    #     valid_phases = [phase for phase in [phase1, phase2] if phase is not None]
-
-    #     # If no valid phases, return None
-    #     if not valid_phases:
-    #         return None
-
-    #     # If multiple valid phases and they are consistent, return the phase
-    #     if len(set(valid_phases)) == 1:
-    #         return valid_phases[0]
-
-    #     # If multiple valid phases but they are inconsistent, return None
-    #     if len(set(valid_phases)) > 1:
-    #         return None
-
-    #     # If only one valid phase, return it
-    #     return valid_phases[0]
-
-    # def _phase_simple_dnm_block(self, min_support=1, max_distance=1):
-    #     """
-    #     Phase the DNM block using a simple comparison of haplotypes.
-
-    #     Parameters:
-    #     - min_support (int): Minimum support for phasing.
-    #     - max_distance (int): Maximum allowable Hamming distance.
-
-    #     Returns:
-    #     - int or None: Returns 0 if the mutation is maternal, 1 if paternal, or None if indeterminate.
-    #     """
-
-    #     mut_pos = self.mut_locus[1]
-    #     genotypes = self.genotypes[self.genotypes['POS'] != mut_pos]
-    #     block_id_child = self.haplo_blocks[self.haplo_blocks['POS'] == mut_pos]['Child'].values[0]
-    #     block_id_mother = self.haplo_blocks[self.haplo_blocks['POS'] == mut_pos]['Mother'].values[0]
-    #     block_id_father = self.haplo_blocks[self.haplo_blocks['POS'] == mut_pos]['Father'].values[0]
-        
-    #     if genotypes.empty or block_id_child is None:
-    #         return None  # No valid genotypes to phase
-        
-    #     # Among the three individuals, find the minimum position of the block
-    #     min_pos = max(self.haplo_blocks[self.haplo_blocks['Child'] == block_id_child]['POS'].min(),
-    #                   self.haplo_blocks[self.haplo_blocks['Father'] == block_id_father]['POS'].min(),
-    #                     self.haplo_blocks[self.haplo_blocks['Mother'] == block_id_mother]['POS'].min())
-        
-    #     max_pos = min(self.haplo_blocks[self.haplo_blocks['Child'] == block_id_child]['POS'].max(),
-    #                     self.haplo_blocks[self.haplo_blocks['Father'] == block_id_father]['POS'].max(),
-    #                         self.haplo_blocks[self.haplo_blocks['Mother'] == block_id_mother]['POS'].max())
-    #     print("Inside simple DNM block method")
-    #     print("Min and max positions are: ", min_pos, max_pos)
-    #     # Extract genotypes in the block
-    #     genotypes = genotypes[genotypes['POS'].between(min_pos, max_pos)]
-    #     # if genotypes.empty:
-    #     #     return None
-    #     # Extract haplotypes
-    #     mother_alleles = genotypes['Mother'].str.split('|', expand=True).astype(int)
-    #     father_alleles = genotypes['Father'].str.split('|', expand=True).astype(int)
-    #     child_alleles = genotypes['Child'].str.split('|', expand=True).astype(int)
-
-    #     # print("Mother alleles are: ", mother_alleles)
-    #     # print("Father alleles are: ", father_alleles)
-    #     # print("Child alleles are: ", child_alleles)
-    #     # Determine which haplotype carries the mutation
-    #     # print("Mutation configuration is: ", self.mut_config)
-    #     if self.mut_config == 1:
-    #         mutation_on_c0 = True
-    #         child_mut_hap , child_other_hap = child_alleles[0], child_alleles[1]
-    #     elif self.mut_config == 0:
-    #         mutation_on_c0 = False
-    #         child_other_hap, child_mut_hap = child_alleles[0], child_alleles[1]
-    #     else:
-    #         return None
-            
-    #     # Calculate Hamming distances
-    #     distances = self._calculate_phasing_distances(
-    #         child_other_hap, child_mut_hap, 
-    #         mother_alleles, father_alleles
-    #     )
-    #     # print("Distances are: ", distances)
- 
-    #     # Decide phase based on minimum distance
-    #     phase = self._decide_phase(distances, min_support, max_distance, mutation_on_c0)
-    #     return phase
-
-    # def _matrix_phasing(self, combined_hap0, combined_hap1, longest_hap0, longest_hap1,
-    #                 longest_individual, combine_individual, mutation_on_c0=True):
-    #     """
-    #     Determine the phase based on Hamming distances.
-
-    #     Parameters:
-    #     - combined_hap0 (np.array): Combined haplotype 0.
-    #     - combined_hap1 (np.array): Combined haplotype 1.
-    #     - longest_hap0 (np.array): Longest haplotype 0.
-    #     - longest_hap1 (np.array): Longest haplotype 1.
-    #     - longest_individual (str): Individual with the longest haploblock ('Child', 'Father', 'Mother').
-    #     - combine_individual (str): Individual whose block was combined with the longest haploblock.
-    #     - mutation_on_c0 (bool): Indicates if the mutation is on the first haplotype in the child.
-
-    #     Returns:
-    #     - int or None: Phase value (0 or 1), or None if indeterminate.
-    #     """
-
-    #     def hamming_distance(x, y):
-    #         return np.sum(x != y)
-
-    #     # Calculate Hamming distances
-    #     configurations = {
-    #         'combined0_longest': [
-    #             hamming_distance(combined_hap0, longest_hap0),
-    #             hamming_distance(combined_hap0, longest_hap1)
-    #         ],
-    #         'combined1_longest': [
-    #             hamming_distance(combined_hap1, longest_hap0),
-    #             hamming_distance(combined_hap1, longest_hap1)
-    #         ]
-    #     }
-
-    #     min_combined0 = min(configurations['combined0_longest'])
-    #     min_combined1 = min(configurations['combined1_longest'])
-
-    #     # Check if the configurations are ambiguous
-    #     if abs(min_combined0 - min_combined1) < 1:
-    #         return None
-
-    #     # Determine which configuration has the minimal Hamming distance
-    #     if min_combined0 == 0:
-    #         config_code = 0
-    #     elif min_combined1 == 0:
-    #         config_code = 1
-    #     else:
-    #         return None
-
-    #     # Assign numerical codes to the individuals
-    #     longest_code = 0 if longest_individual == "Child" else 1
-    #     combine_code = 0 if combine_individual == "Father" else 1
-    #     mutation_code = int(mutation_on_c0)
-
-    #     # Calculate the total code and determine the phase
-    #     total = config_code + longest_code + combine_code + mutation_code
-    #     return total % 2
-
-        # def _find_individual_with_longest_block(self, haplo_blocks, mut_pos):
-    #     """
-    #     Calculate the positions of a haploblock.
-
-    #     Parameters:
-    #     - haplo_blocks (pd.DataFrame): DataFrame containing haploblocks.
-    #     - individual (str): Individual identifier.
-    #     - mut_pos (int): Mutation position.
-
-    #     Returns:
-    #     - block_size_max_ind (str): Individual with the longest haploblock.
-
-    #     """
-    #     blocknames = haplo_blocks[haplo_blocks['POS'] == mut_pos][['Child', 'Father', 'Mother']].values[0]
-    #     block_size_max = 0
-    #     block_size_max_ind = None
-    #     for i in range(len(blocknames)):
-    #         if blocknames[i] is not None or blocknames[i] != '.':
-    #             block_size = self._get_block_size(haplo_blocks, 'Child', blocknames[i])
-    #             if block_size > block_size_max:
-    #                 block_size_max = block_size
-    #                 block_size_max_ind = ['Child', 'Father', 'Mother'][i]
-    #     return block_size_max_ind
 
     def _get_explicit_phase(self, phase):
         """
@@ -1010,94 +776,21 @@ class HaplotypeBlock:
 # ============================================================================================= #
 # Example Usage (For Testing)
 # ============================================================================================= #
-if __name__ == "__main__":
-    # Import individual read-based phases from Whatshap
-    ## First case: simple phasing of the DNM haploblock - Mother is the source
-    # with open("examples/phasedTrio_1.vcf", 'w') as f: 
-    #     f.write("#CHROM\tPOS\t100949\t100934\t100947\n")
-    #     f.write("JAKFHU010000086.1\t110\t0|0:3\t0|0:5\t0|1:1\n")
-    #     f.write("JAKFHU010000086.1\t111\t1|1:3\t0|0:5\t0|1:1\n")
-    #     f.write("JAKFHU010000086.1\t113\t0|1:3\t0|0:5\t0|1:1\n")
-    #     f.write("JAKFHU010000086.1\t115\t0|1:4\t1|0:6\t0|0:1\n")
-    #     f.write("JAKFHU010000086.1\t116\t0|0:4\t0|0:6\t0|0:.\n")
-    
-    # ## Second case: phasing of the DNM haploblock with a second longest haploblock - Father is the source
-    # with open("examples/phasedTrio_1.vcf", 'w') as f:
-    #     f.write("#CHROM\tPOS\t100949\t100934\t100947\n")
-    #     f.write("JAKFHU010000086.1\t110\t0|0:3\t0|0:5\t0|1:1\n")
-    #     f.write("JAKFHU010000086.1\t111\t0|0:3\t0|0:5\t0|0:1\n")
-    #     f.write("JAKFHU010000086.1\t113\t0|1:4\t0|0:6\t1|0:1\n")
-    #     f.write("JAKFHU010000086.1\t115\t0|1:4\t0|1:6\t1|1:1\n")
-    #     f.write("JAKFHU010000086.1\t116\t0|1:4\t0|1:.\t1|1:1\n")
-    
-    
-    # with open("examples/phasedTrio_1.vcf", 'w') as f:
-    #     f.write("#CHROM\tPOS\t100949\t100934\t100947\n")
-    #     f.write("JAKFHU010000086.1\t110\t0|0:6\t0|0:3\t0|1:1\n")
-    #     f.write("JAKFHU010000086.1\t111\t0|1:6\t0|1:3\t0|1:1\n")
-    #     f.write("JAKFHU010000086.1\t113\t0|1:7\t0|0:4\t1|0:1\n")
-    #     f.write("JAKFHU010000086.1\t115\t0|1:7\t0|0:5\t1|0:1\n")
-    
-#     # ##Chain : Mother is the source
-    # with open("examples/phasedTrio_1.vcf", 'w') as f:
-    #     f.write("#CHROM\tPOS\t100949\t100934\t100947\n")
-    #     f.write("JAKFHU010000086.1\t110\t0|0:3\t0|0:6\t0|1:1\n")
-    #     f.write("JAKFHU010000086.1\t111\t0|1:3\t0|1:6\t0|1:1\n")
-    #     f.write("JAKFHU010000086.1\t113\t0|0:4\t0|1:7\t1|0:1\n")
-    #     f.write("JAKFHU010000086.1\t115\t0|0:5\t0|1:7\t1|0:1\n")
-    
-    ## Case 5.2 : Combine the blocks of with the longest haploblock in the parents - Expected father to be the source of the DNM 
-# #     ##  Case 5.3: Child has the longest blockm expected DNM from mum
-#     with open("examples/phasedTrio_1.vcf", 'w') as f:
-#         f.write("#CHROM\tPOS\t100949\t100934\t100947\n")
-#         f.write("JAKFHU010000086.1\t110\t0|0:3\t0|0:6\t0|1:1\n")
-#         f.write("JAKFHU010000086.1\t111\t0|1:3\t0|1:6\t0|1:1\n")
-#         f.write("JAKFHU010000086.1\t113\t0|1:4\t1|0:6\t1|1:2\n")
-#         f.write("JAKFHU010000086.1\t115\t0|1:5\t1|1:6\t1|0:.\n")
-    
-    ## Case 5.4: Combine the blocks of with the longest haploblock in the parents - Expected mother to be the source of the DNM
-        
-
-    # # ## Genotypes of the trio must be in order: Mother, Father, Child
-    # phasedVCF = pd.read_csv(
-    #     "examples/phasedTrio_1.vcf",
-    #     comment='#',
-    #     sep="\t",
-    #     names=['CHROM', 'POS', 'Mother', 'Father', 'Child']
-    # )
-
-    # # # Mutation positions in bed format
-    # mutations = pd.read_csv("examples/mutations_1.bed", sep="\t")
-
-    # ## Form an rbMutationBlock
-    # print(mutations.loc[0, "CHROM"], mutations.loc[0, "POS"])
-
-    # mublock = RbMutationBlock(
-    #     10000,
-    #     mutations.loc[0, 'CHROM'],
-    #     mutations.loc[0, 'POS'],
-    #     phasedVCF
-    # )
-
-    # print(mublock.mut_locus)
-    # print(mublock.phase)
-    # print(mublock.phase_method)
-    
-    
-    
+if __name__ == "__main__":    
+    pass
     # Main data
     # ----------------------------------------------------------------------------------------- #
     # Import individual read-based phases from Whatshap
-    phased_vcf = pd.read_csv(
-        "examples/test.vcf",
-        comment='#',
-        sep="\t",
-        # names=['CHROM', 'POS', 'Mother', 'Father', 'Child']
-        names = ['CHROM', 'POS', 'Child', 'Father', 'Mother']
-    )
+    # phased_vcf = pd.read_csv(
+    #     "examples/test.vcf",
+    #     comment='#',
+    #     sep="\t",
+    #     # names=['CHROM', 'POS', 'Mother', 'Father', 'Child']
+    #     names = ['CHROM', 'POS', 'Child', 'Father', 'Mother']
+    # )
 
-    # # Mutation positions in bed format
-    mutations = pd.read_csv("examples/mutations_testvcf.bed", sep="\t")
+    # # # Mutation positions in bed format
+    # mutations = pd.read_csv("examples/mutations_testvcf.bed", sep="\t")
     
     # # ## ----------------------------------------------------------------------------------------- #
     # # Test on one mutation
@@ -1112,29 +805,29 @@ if __name__ == "__main__":
 
     # ## ----------------------------------------------------------------------------------------- #
     # # # Calculate phase for every mutation
-    phase_blocks = [
-        RbMutationBlock(10000, chrom, pos, phased_vcf)
-        for chrom, pos in zip(mutations["CHROM"], mutations["POS"])
-    ]
+    # phase_blocks = [
+    #     RbMutationBlock(10000, chrom, pos, phased_vcf)
+    #     for chrom, pos in zip(mutations["CHROM"], mutations["POS"])
+    # ]
 
-    # Extract phases
-    mu_phases = [
-        (block.mut_locus, block.phase, block.phase_method)
-        for block in phase_blocks if block.phase in ["Maternal", "Paternal"]
-    ]
+    # # Extract phases
+    # mu_phases = [
+    #     (block.mut_locus, block.phase, block.phase_method)
+    #     for block in phase_blocks if block.phase in ["Maternal", "Paternal"]
+    # ]
     
-    not_phased = [
-        (block.mut_locus, block.phase, block.phase_method)
-        for block in phase_blocks if block.phase not in ["Maternal", "Paternal"]
-    ]
+    # not_phased = [
+    #     (block.mut_locus, block.phase, block.phase_method)
+    #     for block in phase_blocks if block.phase not in ["Maternal", "Paternal"]
+    # ]
 
-    print("Phased Mutations:")
-    for locus, phase, method in mu_phases:
-        print(f"Mutation at {locus}: Phase - {phase}, Method - {method}")
-    print(f"Number of mutations phased: {len(mu_phases)}")
+    # print("Phased Mutations:")
+    # for locus, phase, method in mu_phases:
+    #     print(f"Mutation at {locus}: Phase - {phase}, Method - {method}")
+    # print(f"Number of mutations phased: {len(mu_phases)}")
     
-    print("Not Phased Mutations:")
-    for locus, phase, method in not_phased:
-        print(f"Mutation at {locus}: Phase - {phase}, Method - {method}")
+    # print("Not Phased Mutations:")
+    # for locus, phase, method in not_phased:
+    #     print(f"Mutation at {locus}: Phase - {phase}, Method - {method}")
         
-    print(f"Number of mutations not phased: {len(not_phased)}")
+    # print(f"Number of mutations not phased: {len(not_phased)}")
