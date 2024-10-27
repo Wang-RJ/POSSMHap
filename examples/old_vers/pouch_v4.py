@@ -1013,6 +1013,7 @@ class HaplotypeBlock:
 # Example Usage (For Testing)
 # ============================================================================================= #
 if __name__ == "__main__":
+    pass
     # Import individual read-based phases from Whatshap
     ## First case: simple phasing of the DNM haploblock - Mother is the source
     # with open("examples/phasedTrio_1.vcf", 'w') as f: 
@@ -1090,53 +1091,53 @@ if __name__ == "__main__":
     # Main data
     # ----------------------------------------------------------------------------------------- #
     # Import individual read-based phases from Whatshap
-    phased_vcf = pd.read_csv(
-        "examples/test.vcf",
-        comment='#',
-        sep="\t",
-        # names=['CHROM', 'POS', 'Mother', 'Father', 'Child']
-        names = ['CHROM', 'POS', 'Child', 'Father', 'Mother']
-    )
+    # phased_vcf = pd.read_csv(
+    #     "examples/test.vcf",
+    #     comment='#',
+    #     sep="\t",
+    #     # names=['CHROM', 'POS', 'Mother', 'Father', 'Child']
+    #     names = ['CHROM', 'POS', 'Child', 'Father', 'Mother']
+    # )
 
-    # # Mutation positions in bed format
-    mutations = pd.read_csv("examples/mutations_testvcf.bed", sep="\t")
+    # # # Mutation positions in bed format
+    # mutations = pd.read_csv("examples/mutations_testvcf.bed", sep="\t")
     
+    # # # ## ----------------------------------------------------------------------------------------- #
+    # # # Test on one mutation
+    # # k = 70
+    # # ck = RbMutationBlock(10000,
+    # #                         mutations.loc[k, 'CHROM'],
+    # #                         mutations.loc[k, 'POS'],
+    # #                         phased_vcf)
+
+    # # # Check position 32, 12, 79, 70, 8
+
+
     # # ## ----------------------------------------------------------------------------------------- #
-    # # Test on one mutation
-    # k = 70
-    # ck = RbMutationBlock(10000,
-    #                         mutations.loc[k, 'CHROM'],
-    #                         mutations.loc[k, 'POS'],
-    #                         phased_vcf)
+    # # # # Calculate phase for every mutation
+    # phase_blocks = [
+    #     RbMutationBlock(10000, chrom, pos, phased_vcf)
+    #     for chrom, pos in zip(mutations["CHROM"], mutations["POS"])
+    # ]
 
-    # # Check position 32, 12, 79, 70, 8
-
-
-    # ## ----------------------------------------------------------------------------------------- #
-    # # # Calculate phase for every mutation
-    phase_blocks = [
-        RbMutationBlock(10000, chrom, pos, phased_vcf)
-        for chrom, pos in zip(mutations["CHROM"], mutations["POS"])
-    ]
-
-    # Extract phases
-    mu_phases = [
-        (block.mut_locus, block.phase, block.phase_method)
-        for block in phase_blocks if block.phase in ["Maternal", "Paternal"]
-    ]
+    # # Extract phases
+    # mu_phases = [
+    #     (block.mut_locus, block.phase, block.phase_method)
+    #     for block in phase_blocks if block.phase in ["Maternal", "Paternal"]
+    # ]
     
-    not_phased = [
-        (block.mut_locus, block.phase, block.phase_method)
-        for block in phase_blocks if block.phase not in ["Maternal", "Paternal"]
-    ]
+    # not_phased = [
+    #     (block.mut_locus, block.phase, block.phase_method)
+    #     for block in phase_blocks if block.phase not in ["Maternal", "Paternal"]
+    # ]
 
-    print("Phased Mutations:")
-    for locus, phase, method in mu_phases:
-        print(f"Mutation at {locus}: Phase - {phase}, Method - {method}")
-    print(f"Number of mutations phased: {len(mu_phases)}")
+    # print("Phased Mutations:")
+    # for locus, phase, method in mu_phases:
+    #     print(f"Mutation at {locus}: Phase - {phase}, Method - {method}")
+    # print(f"Number of mutations phased: {len(mu_phases)}")
     
-    print("Not Phased Mutations:")
-    for locus, phase, method in not_phased:
-        print(f"Mutation at {locus}: Phase - {phase}, Method - {method}")
+    # print("Not Phased Mutations:")
+    # for locus, phase, method in not_phased:
+    #     print(f"Mutation at {locus}: Phase - {phase}, Method - {method}")
         
-    print(f"Number of mutations not phased: {len(not_phased)}")
+    # print(f"Number of mutations not phased: {len(not_phased)}")
