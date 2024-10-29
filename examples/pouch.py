@@ -701,50 +701,56 @@ class RbMutationBlock:
             mutation_on_c0 = False
 
         mut_block_idx = [k for k in range(len(haplo_blocks_child)) if haplo_blocks_child[k].contains_mutation]
-        print("Mutation block index is: ", mut_block_idx)
         dnm_block_child = list_blocks_child[mut_block_idx[0]]
         first_block_mother = list_blocks_mother[0]
         first_block_father = list_blocks_father[0]
-        combined_blocks_child = generate_super_matrices(list_blocks_child, M_star=dnm_block_child)
-        combined_blocks_father = generate_super_matrices(list_blocks_father, M_star=first_block_father)
-        combined_blocks_mother = generate_super_matrices(list_blocks_mother, M_star=first_block_mother)
-        if len(combined_blocks_child) == 0 or len(combined_blocks_father) == 0 or len(combined_blocks_mother) == 0:
-            return 
         
-        all_phases = []
-        all_distances = []
-        logger.info("Done generating combined blocks for each individuals, preparing to generate combinations....")
-        logger.info(f"Number of combined blocks in the child is {len(combined_blocks_child)}")
-        logger.info(f"Number of combined blocks for the mother is {len(combined_blocks_mother)}")
-        logger.info(f"Number of combined blocks for the father is {len(combined_blocks_father)}")
-        
-                # Remove DataFrame conversions inside loops
-        
-                    
-        # Non parallelized version
-        for b_c in combined_blocks_child:
-            for b_m in combined_blocks_mother:
-                for b_f in combined_blocks_father:
-                    b_c = pd.DataFrame(b_c, columns=[0, 1])
-                    b_f = pd.DataFrame(b_f, columns=[0, 1])
-                    b_m = pd.DataFrame(b_m, columns=[0, 1])
-                    distances = self._calculate_phasing_distances(child_mut_hap=b_c[0], child_other_hap=b_c[1], mother_alleles=b_m, father_alleles=b_f)    
-                    all_distances.append(distances)
-                    phase = self._decide_phase(distances, 1, 1, mutation_on_c0)
+        ## Create sublist of haploblocks in increasing order of their relative distance to the mutation
+        for k in range(min(len(list_blocks_child), len(list_blocks_father), len(list_blocks_mother)) - 1):
+            logger.info(f"Generating combined blocks for k = {k} blocks")
+            sub_list_child = list_blocks_child[:k+1]
+            sub_list_father = list_blocks_father[:k+1]
+            sub_list_mother = list_blocks_mother[:k+1]
+            combined_blocks_child = generate_super_matrices(sub_list_child, M_star=dnm_block_child)
+            combined_blocks_father = generate_super_matrices(sub_list_father, M_star=first_block_father)
+            combined_blocks_mother = generate_super_matrices(sub_list_mother, M_star=first_block_mother)
+            if len(combined_blocks_child) == 0 or len(combined_blocks_father) == 0 or len(combined_blocks_mother) == 0:
+                return 
+            
+            all_phases = []
+            all_distances = []
+            logger.info("Done generating combined blocks for each individuals, preparing to generate combinations....")
+            logger.info(f"Number of combined blocks in the child is {len(combined_blocks_child)}")
+            logger.info(f"Number of combined blocks for the mother is {len(combined_blocks_mother)}")
+            logger.info(f"Number of combined blocks for the father is {len(combined_blocks_father)}")
+            
+            # Remove DataFrame conversions inside loops
+            
+                        
+            # Non parallelized version
+            for b_c in combined_blocks_child:
+                for b_m in combined_blocks_mother:
+                    for b_f in combined_blocks_father:
+                        b_c = pd.DataFrame(b_c, columns=[0, 1])
+                        b_f = pd.DataFrame(b_f, columns=[0, 1])
+                        b_m = pd.DataFrame(b_m, columns=[0, 1])
+                        distances = self._calculate_phasing_distances(child_mut_hap=b_c[0], child_other_hap=b_c[1], mother_alleles=b_m, father_alleles=b_f)    
+                        all_distances.append(distances)
+                        phase = self._decide_phase(distances, 1, 1, mutation_on_c0)
 
-                    if phase is not None:
-                        all_phases.append(phase)
-                    else: 
-                        all_phases.append(1000)
+                        if phase is not None:
+                            all_phases.append(phase)
+                        else: 
+                            all_phases.append(1000)
 
-        # Decide all the phases
-        if 0 in all_phases and 1 in all_phases:
-            return 
-        if 1 in all_phases and all_phases.count(0) == 0:
-            return 1
-        if 0 in all_phases and all_phases.count(1) == 0:
-            return 0
-        return None
+            # Decide all the phases
+            if 0 in all_phases and 1 in all_phases:
+                return 
+            if 1 in all_phases and all_phases.count(0) == 0:
+                return 1
+            if 0 in all_phases and all_phases.count(1) == 0:
+                return 0
+            return None
 
     def _get_explicit_phase(self, phase):
         """
