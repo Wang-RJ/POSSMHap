@@ -455,8 +455,7 @@ class RbMutationBlock:
                     block_end_pos=block_end,
                     individual=individual,
                     contains_mutation=contains_mutation,
-                    positions=block_positions.tolist(),
-                    mut_pos=mut_pos
+                    positions=block_positions.tolist()
                 )
     
                 blocks.append(block_obj)
@@ -677,11 +676,6 @@ class RbMutationBlock:
         genotypes_unrestricted.set_index('POS', inplace=True)
         genotypes_unrestricted.drop(self.mut_locus[1], inplace=True)
         
-        # Sort the blocks by their self.relative distance to the mutation
-        haplo_blocks_child.sort(key=lambda x: x.relative)
-        haplo_blocks_father.sort(key=lambda x: x.relative)
-        haplo_blocks_mother.sort(key=lambda x: x.relative)
-        
         # Extract positions
         positions_child = list(itertools.chain(*[b.positions for b in haplo_blocks_child]))
         positions_father = list(itertools.chain(*[b.positions for b in haplo_blocks_father]))
@@ -691,8 +685,6 @@ class RbMutationBlock:
         list_blocks_father = [genotypes_unrestricted[genotypes_unrestricted.index.isin(set(haplo_blocks_father[k].positions) & common_positions)]['Father'].str.split('|', expand=True).astype(int).to_numpy() for k in range(len(haplo_blocks_father))]
         list_blocks_mother = [genotypes_unrestricted[genotypes_unrestricted.index.isin(set(haplo_blocks_mother[k].positions) & common_positions)]['Mother'].str.split('|', expand=True).astype(int).to_numpy() for k in range(len(haplo_blocks_mother))]
         list_blocks_child = [genotypes_unrestricted[genotypes_unrestricted.index.isin(set(haplo_blocks_child[k].positions) & common_positions)]['Child'].str.split('|', expand=True).astype(int).to_numpy() for k in range(len(haplo_blocks_child))]
-        
-        
         # Determine which haplotype carries the mutation
         if self.mut_config == 1:
             mutation_on_c0 = True
@@ -701,7 +693,6 @@ class RbMutationBlock:
             mutation_on_c0 = False
 
         mut_block_idx = [k for k in range(len(haplo_blocks_child)) if haplo_blocks_child[k].contains_mutation]
-        print("Mutation block index is: ", mut_block_idx)
         dnm_block_child = list_blocks_child[mut_block_idx[0]]
         first_block_mother = list_blocks_mother[0]
         first_block_father = list_blocks_father[0]
@@ -765,7 +756,7 @@ class HaplotypeBlock:
     """
 
     def __init__(self, block_id, block_size, block_start_pos, block_end_pos, individual,
-                 contains_mutation=False, positions=None, mut_pos=None):
+                 contains_mutation=False, positions=None):
         """
         Initialize a HaplotypeBlock object.
 
@@ -786,12 +777,6 @@ class HaplotypeBlock:
         self.contains_mutation = contains_mutation
         self.positions = positions or []
 
-        # Relative positions compared to the dnm position
-        if (mut_pos is not None):
-            self.relative = int(abs((self.end - self.start)/2 - mut_pos))
-            
-        else: 
-            self.relative = None
         if individual not in ['Father', 'Mother', 'Child']:
             raise ValueError("Individual must be 'Father', 'Mother', or 'Child'")
 
