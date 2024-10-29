@@ -179,9 +179,9 @@ class RbMutationBlock:
         """
         mut_pos = self.mut_locus[1]
         genotypes, haplo_blocks = splitGT(region, mut_pos)
-        print("After splitGT")
-        print(genotypes)
-        print(haplo_blocks)
+        # print("After splitGT")
+        # print(genotypes)
+        # print(haplo_blocks)
         
         # Find the block containing the mutation in the child
         # Get the contained phase around the mutation block
@@ -326,7 +326,7 @@ class RbMutationBlock:
         """
         def hamming_distance(x, y):
             return np.sum(x != y)
-        print(sum(mother_alleles[0] == child_other_hap), sum(father_alleles[1] == child_mut_hap))
+        # print(sum(mother_alleles[0] == child_other_hap), sum(father_alleles[1] == child_mut_hap))
         configurations = {
             'maternal': [hamming_distance(child_mut_hap, mother_alleles[i]) + hamming_distance(child_other_hap, father_alleles[j]) for i in range(2) for j in range(2)],
             'paternal': [hamming_distance(child_other_hap, mother_alleles[i]) + hamming_distance(child_mut_hap, father_alleles[j]) for i in range(2) for j in range(2)]
@@ -348,8 +348,8 @@ class RbMutationBlock:
         """
         maternal_distance = distances['maternal']
         paternal_distance = distances['paternal']
-        print(f"maternal_distance{maternal_distance}")
-        print(f"paternal_distance{paternal_distance}")
+        # print(f"maternal_distance{maternal_distance}")
+        # print(f"paternal_distance{paternal_distance}")
         if abs(np.min(maternal_distance) - np.min(paternal_distance)) < min_support:
             logger.debug("Ambiguous phasing due to small difference in distances.")
             return None
@@ -378,7 +378,7 @@ class RbMutationBlock:
         """
         haplo_blocks = self.haplo_blocks
         mut_pos = self.mut_locus[1]
-        print(haplo_blocks[haplo_blocks['POS'] == mut_pos]['Child'])
+        # print(haplo_blocks[haplo_blocks['POS'] == mut_pos]['Child'])
         # Get haploblock IDs at the mutation position
         haplo_blk_child = haplo_blocks[haplo_blocks['POS'] == mut_pos]['Child'].values[0]
         haplo_blk_father = haplo_blocks[haplo_blocks['POS'] == mut_pos]['Father'].values[0]
@@ -455,7 +455,8 @@ class RbMutationBlock:
                     block_end_pos=block_end,
                     individual=individual,
                     contains_mutation=contains_mutation,
-                    positions=block_positions.tolist()
+                    positions=block_positions.tolist(),
+                    mut_pos=mut_pos
                 )
     
                 blocks.append(block_obj)
@@ -464,7 +465,7 @@ class RbMutationBlock:
                 'blocks': [b for b in blocks if not b.contains_mutation],
                 'dnm_block': next((b for b in blocks if b.contains_mutation), None)
             }
-        print(haplo_info)
+        # print(haplo_info)
         return haplo_info
 
     def _phase_dnm_block(self, haplo_info):
@@ -632,7 +633,7 @@ class RbMutationBlock:
             'c1_from_parent': [hamming_distance(child_other_hap, parent_alleles[0]), hamming_distance(child_other_hap, parent_alleles[1])]
         }
         print("Configurations are: ", configurations)
-        print(sum(configurations['c0_from_parent']), sum(configurations['c1_from_parent']))
+        # print(sum(configurations['c0_from_parent']), sum(configurations['c1_from_parent']))
         if abs(min(configurations['c0_from_parent']) - min(configurations['c1_from_parent'])) < 1:
             return 
         # Ambiguity in haplotype transmission, the haploblock is not informative for this pare
@@ -686,6 +687,8 @@ class RbMutationBlock:
         list_blocks_father = [genotypes_unrestricted[genotypes_unrestricted.index.isin(set(haplo_blocks_father[k].positions) & common_positions)]['Father'].str.split('|', expand=True).astype(int).to_numpy() for k in range(len(haplo_blocks_father))]
         list_blocks_mother = [genotypes_unrestricted[genotypes_unrestricted.index.isin(set(haplo_blocks_mother[k].positions) & common_positions)]['Mother'].str.split('|', expand=True).astype(int).to_numpy() for k in range(len(haplo_blocks_mother))]
         list_blocks_child = [genotypes_unrestricted[genotypes_unrestricted.index.isin(set(haplo_blocks_child[k].positions) & common_positions)]['Child'].str.split('|', expand=True).astype(int).to_numpy() for k in range(len(haplo_blocks_child))]
+        
+        
         # Determine which haplotype carries the mutation
         if self.mut_config == 1:
             mutation_on_c0 = True
@@ -705,14 +708,22 @@ class RbMutationBlock:
         
         all_phases = []
         all_distances = []
+        logger.info("Done generating combined blocks for each individuals, preparing to generate combinations....")
+        logger.info(f"Number of combined blocks in the child is {len(combined_blocks_child)}")
+        logger.info(f"Number of combined blocks for the mother is {len(combined_blocks_mother)}")
+        logger.info(f"Number of combined blocks for the father is {len(combined_blocks_father)}")
         
+                # Remove DataFrame conversions inside loops
+        
+                    
+        # Non parallelized version
         for b_c in combined_blocks_child:
             for b_m in combined_blocks_mother:
                 for b_f in combined_blocks_father:
                     b_c = pd.DataFrame(b_c, columns=[0, 1])
                     b_f = pd.DataFrame(b_f, columns=[0, 1])
                     b_m = pd.DataFrame(b_m, columns=[0, 1])
-                    distances = self._calculate_phasing_distances(child_mut_hap=b_c[0], child_other_hap=b_c[1], mother_alleles=b_m, father_alleles=b_f)
+                    distances = self._calculate_phasing_distances(child_mut_hap=b_c[0], child_other_hap=b_c[1], mother_alleles=b_m, father_alleles=b_f)    
                     all_distances.append(distances)
                     phase = self._decide_phase(distances, 1, 1, mutation_on_c0)
 
@@ -749,7 +760,7 @@ class HaplotypeBlock:
     """
 
     def __init__(self, block_id, block_size, block_start_pos, block_end_pos, individual,
-                 contains_mutation=False, positions=None):
+                 contains_mutation=False, positions=None, mut_pos=None):
         """
         Initialize a HaplotypeBlock object.
 
@@ -770,14 +781,20 @@ class HaplotypeBlock:
         self.contains_mutation = contains_mutation
         self.positions = positions or []
 
+        # Relative positions compared to the dnm position
+        if (mut_pos is not None):
+            self.relative = int(abs((self.end - self.start)/2 - mut_pos))
+            
+        else: 
+            self.relative = None
         if individual not in ['Father', 'Mother', 'Child']:
             raise ValueError("Individual must be 'Father', 'Mother', or 'Child'")
 
 # ============================================================================================= #
 # Example Usage (For Testing)
 # ============================================================================================= #
-if __name__ == "__main__":    
-    pass
+# if __name__ == "__main__":    
+    # pass
     # Main data
     # ----------------------------------------------------------------------------------------- #
     # Import individual read-based phases from Whatshap

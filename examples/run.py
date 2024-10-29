@@ -4,10 +4,10 @@ from pouch import *
 # Argparse
 import argparse
 parser = argparse.ArgumentParser(description="Script to run POUCH")
-parser.add_argument("vcf", help="Full path of the vcf file that were formatted by Whatshap. Default separator is tab. e.g., 'phased.vcf'")
-parser.add_argument("trio_order", help="Order of the trio in the vcf file. e.g., 'Mother,Father,Child'")
-parser.add_argument("mutation_file", help="Full path of the mutation file in bed format. Default separator is tab. e.g., 'mutations.bed'")
-parser.add_argument("output", help="Full path of the output file. e.g., 'output.txt'")
+parser.add_argument("-vcf", help="Full path of the vcf file that were formatted by Whatshap. Default separator is tab. e.g., 'phased.vcf'")
+parser.add_argument("-trio_order", help="Order of the trio in the vcf file. e.g., 'Mother,Father,Child'")
+parser.add_argument("-mutation_file", help="Full path of the mutation file in bed format. Default separator is tab. e.g., 'mutations.bed'")
+parser.add_argument("-output", help="Full path of the output file. e.g., 'output.txt'")
 
 args = parser.parse_args()
 
@@ -19,7 +19,14 @@ output = args.output
 
 ## Script to run pouch
 # Import individual read-based phases from Whatshap
-phased_vcf = pd.read_csv(vcf, sep="\t", comment="#", header=None, names=["CHROM", "POS"] + trio_order)
+phased_vcf = pd.read_csv(vcf, sep="\t", comment="#", header=None)
+# Extract the offspringID
+for i in range(len(trio_order)):
+    if trio_order[i] == "Child":
+        offspring_ID = phased_vcf.columns[i + 2]
+
+# Assign names to columns of the dataframe
+phased_vcf.columns =["CHROM", "POS"] + trio_order
 
 # Mutation positions in bed format
 mutations = pd.read_csv(mutation_file, sep="\t")
@@ -36,15 +43,15 @@ mu_phases = [
         for block in phase_blocks if block.phase in ["Maternal", "Paternal"]]
 
 not_phased = [
-        (block.mut_locus, block.phase, block.phase_method)
+        (block.mut_locus, "unassigned", "-")
         for block in phase_blocks if block.phase not in ["Maternal", "Paternal"]
     ]
 
 
 # Write output in a file
 with open(output, "w") as f:
-    f.write("Mutation\tParentOfOrigin\tMethod\n")
-    for mut, phase, method in mu_phases:
-        f.write(f"{mut} {phase} {method}\n")
-    for mut, phase, method in not_phased:
-        f.write(f"{mut} {phase} {method}\n")
+    f.write("CHROM\tPOS\tOffspring_ID\tParentOfOrigin\tMethod\n")
+    for (mut_chr, mut_pos), phase, method in mu_phases:
+        f.write(f"{mut_chr}\t{mut_pos}\t{offspring_ID}\t{phase}\t{method}\n")
+    for (mut_chr, mut_pos), phase, method in not_phased:
+        f.write(f"{mut_chr}\t{mut_pos}\t{offspring_ID}\t{phase}\t{method}\n")
