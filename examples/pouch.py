@@ -292,16 +292,30 @@ class RbMutationBlock:
      
         # Sort the blocks by their starting position
         haplo_blocks_child = [b for b in haplo_blocks_info['Child']['blocks']] + [haplo_blocks_info['Child']['dnm_block']] #.sort(key=lambda x: x.start)
-        haplo_blocks_child.sort(key=lambda x: x.start)
-        
         haplo_blocks_father = [b for b in haplo_blocks_info['Father']['blocks']] + [haplo_blocks_info['Father']['dnm_block']] 
-        haplo_blocks_father.sort(key=lambda x: x.start)
-        
         haplo_blocks_mother = [b for b in haplo_blocks_info['Mother']['blocks']] + [haplo_blocks_info['Mother']['dnm_block']]
-        haplo_blocks_mother.sort(key=lambda x: x.start)
         
-        phase = self._attempt_block_chaining(haplo_blocks_child=haplo_blocks_child, haplo_blocks_father=haplo_blocks_father,\
-            haplo_blocks_mother=haplo_blocks_mother)
+        if len(haplo_blocks_child) > 5 or len(haplo_blocks_father) > 5 or len(haplo_blocks_mother) > 5:
+            logger.info("Too many haploblocks. Will restrict to 5 haploblocks")
+            # Restrict to 5 haploblocks
+            haplo_blocks_child_restrict = haplo_blocks_child[:4] + [haplo_blocks_child[-1]]
+            haplo_blocks_father_restrict = haplo_blocks_father[:4] + [haplo_blocks_father[-1]]
+            haplo_blocks_mother_restrict = haplo_blocks_mother[:4] + [haplo_blocks_mother[-1]]
+            
+            # Sort the blocks by their starting position
+            haplo_blocks_mother_sorted = sorted(haplo_blocks_mother_restrict, key=lambda x: x.start)
+            haplo_blocks_father_sorted = sorted(haplo_blocks_father_restrict, key=lambda x: x.start)
+            haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: x.start)
+            
+           
+        else:
+            haplo_blocks_child_sorted = sorted(haplo_blocks_child, key=lambda x: x.start)
+            haplo_blocks_father_sorted = sorted(haplo_blocks_father, key=lambda x: x.start)
+            haplo_blocks_mother_sorted = sorted(haplo_blocks_mother, key=lambda x: x.start)
+        
+        
+        phase = self._attempt_block_chaining(haplo_blocks_child=haplo_blocks_child_sorted, haplo_blocks_father=haplo_blocks_father_sorted,\
+            haplo_blocks_mother=haplo_blocks_mother_sorted)
         
         if phase is not None:
             self.phase = self._get_explicit_phase(phase)
@@ -677,11 +691,6 @@ class RbMutationBlock:
         genotypes_unrestricted.set_index('POS', inplace=True)
         genotypes_unrestricted.drop(self.mut_locus[1], inplace=True)
         
-        # Sort the blocks by their self.relative distance to the mutation
-        haplo_blocks_child.sort(key=lambda x: x.relative)
-        haplo_blocks_father.sort(key=lambda x: x.relative)
-        haplo_blocks_mother.sort(key=lambda x: x.relative)
-        
         # Extract positions
         positions_child = list(itertools.chain(*[b.positions for b in haplo_blocks_child]))
         positions_father = list(itertools.chain(*[b.positions for b in haplo_blocks_father]))
@@ -700,16 +709,19 @@ class RbMutationBlock:
         elif self.mut_config == 0:
             mutation_on_c0 = False
 
-        mut_block_idx = [k for k in range(len(haplo_blocks_child)) if haplo_blocks_child[k].contains_mutation]
-        dnm_block_child = list_blocks_child[mut_block_idx[0]]
-        first_block_mother = list_blocks_mother[0]
-        first_block_father = list_blocks_father[0]
+        mut_block_idx_child = [k for k in range(len(haplo_blocks_child)) if haplo_blocks_child[k].contains_mutation]
+        mut_block_idx_father = [k for k in range(len(haplo_blocks_father)) if haplo_blocks_father[k].contains_mutation]
+        mut_block_idx_mother = [k for k in range(len(haplo_blocks_mother)) if haplo_blocks_mother[k].contains_mutation]
+        dnm_block_child = list_blocks_child[mut_block_idx_child[0]]
+        first_block_mother = list_blocks_mother[mut_block_idx_father[0]]
+        first_block_father = list_blocks_father[mut_block_idx_mother[0]]
+
         
         ## Create sublist of haploblocks in increasing order of their relative distance to the mutation
-        for k in range(min(len(list_blocks_child), len(list_blocks_father), len(list_blocks_mother)) - 1):
+        for k in range()
             logger.info(f"Generating combined blocks for k = {k} blocks")
-            sub_list_child = list_blocks_child[:k+1]
-            sub_list_father = list_blocks_father[:k+1]
+            sub_list_child = [dnm_block_child] + list_blocks_child[:k+1]
+            sub_list_father = [] + list_blocks_father[:k+1] 
             sub_list_mother = list_blocks_mother[:k+1]
             combined_blocks_child = generate_super_matrices(sub_list_child, M_star=dnm_block_child)
             combined_blocks_father = generate_super_matrices(sub_list_father, M_star=first_block_father)
@@ -724,9 +736,6 @@ class RbMutationBlock:
             logger.info(f"Number of combined blocks for the mother is {len(combined_blocks_mother)}")
             logger.info(f"Number of combined blocks for the father is {len(combined_blocks_father)}")
             
-            # Remove DataFrame conversions inside loops
-            
-                        
             # Non parallelized version
             for b_c in combined_blocks_child:
                 for b_m in combined_blocks_mother:
