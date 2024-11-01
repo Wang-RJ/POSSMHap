@@ -296,17 +296,21 @@ class RbMutationBlock:
         haplo_blocks_mother = [b for b in haplo_blocks_info['Mother']['blocks']] + [haplo_blocks_info['Mother']['dnm_block']]
         
         if len(haplo_blocks_child) > 5 or len(haplo_blocks_father) > 5 or len(haplo_blocks_mother) > 5:
-            logger.info("Too many haploblocks. Will restrict to 5 haploblocks")
-            # Restrict to 5 haploblocks
-            haplo_blocks_child_restrict = haplo_blocks_child[:4] + [haplo_blocks_child[-1]]
-            haplo_blocks_father_restrict = haplo_blocks_father[:4] + [haplo_blocks_father[-1]]
-            haplo_blocks_mother_restrict = haplo_blocks_mother[:4] + [haplo_blocks_mother[-1]]
+            k = 5
+            while k < min(len(haplo_blocks_child), len(haplo_blocks_father), len(haplo_blocks_mother)):
+                logger.info(f"Too many haploblocks. Will restrict to {k} haploblocks")
+                # Restrict to 5 haploblocks
+                haplo_blocks_child_restrict = haplo_blocks_child[:4] + [haplo_blocks_child[-1]]
+                haplo_blocks_father_restrict = haplo_blocks_father[:4] + [haplo_blocks_father[-1]]
+                haplo_blocks_mother_restrict = haplo_blocks_mother[:4] + [haplo_blocks_mother[-1]]
             
-            # Sort the blocks by their starting position
-            haplo_blocks_mother_sorted = sorted(haplo_blocks_mother_restrict, key=lambda x: x.start)
-            haplo_blocks_father_sorted = sorted(haplo_blocks_father_restrict, key=lambda x: x.start)
-            haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: x.start)
             
+                # Sort the blocks by their starting position
+                haplo_blocks_mother_sorted = sorted(haplo_blocks_mother_restrict, key=lambda x: x.start)
+                haplo_blocks_father_sorted = sorted(haplo_blocks_father_restrict, key=lambda x: x.start)
+                haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: x.start)
+            k += 1
+                
            
         else:
             haplo_blocks_child_sorted = sorted(haplo_blocks_child, key=lambda x: x.start)
