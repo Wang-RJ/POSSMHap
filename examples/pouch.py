@@ -296,7 +296,7 @@ class RbMutationBlock:
         haplo_blocks_mother = [b for b in haplo_blocks_info['Mother']['blocks']] + [haplo_blocks_info['Mother']['dnm_block']]
         
         if len(haplo_blocks_child) > 5 or len(haplo_blocks_father) > 5 or len(haplo_blocks_mother) > 5:
-            k = 5
+            k = 2
             while k < min(len(haplo_blocks_child), len(haplo_blocks_father), len(haplo_blocks_mother)):
                 logger.info(f"Too many haploblocks. Will restrict to {k} haploblocks")
                 # Restrict to 5 haploblocks
