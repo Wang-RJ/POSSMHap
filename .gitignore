@@ -9,3 +9,6 @@ slurm_output/*
 
 ## Ignore slurm scripts
 *.script
+
+## Ignore files outside
+pouch.py

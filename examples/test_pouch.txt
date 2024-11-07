@@ -1,2 +1,2 @@
 CHROM	POS	Offspring_ID	ParentOfOrigin	Method
-chr17	66130498	2	Maternal	DNM Haploblock
+chr11	127401345	2	Maternal	Longest Haploblock Phasing
