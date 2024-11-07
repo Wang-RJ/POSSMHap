@@ -1,2 +1,2 @@
 CHROM	POS	Offspring_ID	ParentOfOrigin	Method
-chr1	188255991	Child	Maternal	DNM Haploblock
+chr17	66130498	2	Maternal	DNM Haploblock
