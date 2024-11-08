@@ -86,6 +86,7 @@ import itertools
 import time
 
 def generate_super_matrices(matrices, M_star):
+    
     # Remove empty matrices
     matrices = [matrix for matrix in matrices if matrix.size > 0]
     if not matrices:
@@ -169,109 +170,3 @@ def generate_super_matrices(matrices, M_star):
 
 
 
-## --------------------------------------------------------------------------------------
-## --- Parallelization
-# import numpy as np
-# import itertools
-# from multiprocessing import Pool, cpu_count
-
-# def worker(args):
-#     matrices, M_star, combinations = args
-#     super_matrices = []
-#     super_matrices_hashes = set()
-#     n = len(matrices)
-    
-#     for combination in combinations:
-#         selected_columns = []
-#         other_columns = []
-        
-#         for i in range(n):
-#             matrix = matrices[i]
-#             if matrix is M_star:
-#                 selected_columns.append(matrix[:, 0])
-#                 other_columns.append(matrix[:, 1])
-#             else:
-#                 choice = combination[i] if i < n - 1 else combination[-1]
-#                 selected_columns.append(matrix[:, choice])
-#                 other_columns.append(matrix[:, 1 - choice])
-        
-#         super_matrix_left = np.concatenate(selected_columns)
-#         super_matrix_right = np.concatenate(other_columns)
-#         super_matrix = np.column_stack((super_matrix_left, super_matrix_right))
-        
-#         super_matrix_hash = hash(super_matrix.tobytes())
-#         if super_matrix_hash not in super_matrices_hashes:
-#             super_matrices.append(super_matrix)
-#             super_matrices_hashes.add(super_matrix_hash)
-    
-#     return super_matrices
-
-# def generate_super_matrices_parallel(matrices, M_star):
-#     matrices = [matrix for matrix in matrices if matrix.size > 0]
-#     if not matrices:
-#         return []
-    
-#     n = len(matrices)
-#     if n == 1:
-#         return matrices
-
-#     print("Number of matrices to combine:", n)
-#     if n > 20:
-#         print("Too many combinations to consider")
-#         return []
-
-#     # Generate all combinations
-#     total_combinations = list(itertools.product([0, 1], repeat=n - 1))
-#     num_combinations = len(total_combinations)
-#     print(f"Total combinations: {num_combinations}")
-
-#     # Determine the number of processes
-#     num_processes = cpu_count()
-#     print(f"Using {num_processes} processes")
-
-#     # Split combinations into chunks
-#     chunk_size = num_combinations // num_processes + 1
-#     combination_chunks = [total_combinations[i:i + chunk_size] for i in range(0, num_combinations, chunk_size)]
-
-#     # Prepare arguments for each worker
-#     args = [(matrices, M_star, chunk) for chunk in combination_chunks]
-
-#     # Use a pool of worker processes
-#     with Pool(processes=num_processes) as pool:
-#         results = pool.map(worker, args)
-
-#     # Combine results and remove duplicates
-#     super_matrices = []
-#     super_matrices_hashes = set()
-#     for result in results:
-#         for super_matrix in result:
-#             super_matrix_hash = hash(super_matrix.tobytes())
-#             if super_matrix_hash not in super_matrices_hashes:
-#                 super_matrices.append(super_matrix)
-#                 super_matrices_hashes.add(super_matrix_hash)
-
-#     return super_matrices
-
-
-# import time
-
-# # Generate sample matrices
-# def generate_sample_matrices(num_matrices, num_rows=2):
-#     matrices = []
-#     for _ in range(num_matrices):
-#         matrix = np.random.randint(0, 2, size=(num_rows, 2)).astype(np.uint8)
-#         matrices.append(matrix)
-#     return matrices
-
-# # Test with 16 matrices
-# num_matrices = 16
-# matrices = generate_sample_matrices(num_matrices)
-# M_star = matrices[0]
-
-# # Measure runtime
-# start_time = time.time()
-# all_super_matrices = generate_super_matrices_parallel(matrices, M_star)
-# end_time = time.time()
-
-# print(f"\nTotal super matrices generated: {len(all_super_matrices)}")
-# print(f"Runtime with multiprocessing: {end_time - start_time:.4f} seconds")

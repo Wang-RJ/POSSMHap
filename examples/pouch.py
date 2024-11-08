@@ -114,9 +114,12 @@ class RbMutationBlock:
             region.loc[mutpos_match, "Child"] = region.loc[mutpos_match, "Child"].apply(
                 lambda x: x.split(":")[0] + ":MUT_BLOCK"
             )
+            logger.info("Missing DNM block associated with the De novo positions for: {mut_chrom} {mut_pos}")
 
         # Get the index of de novo
         mutpos_index = region.index[region["POS"] == mut_pos].tolist()
+        
+        
         mutblock = region.loc[mutpos_index[0], "Child"].split(":")[1]
         
         if mutblock not in [".", None]: 
@@ -376,6 +379,7 @@ class RbMutationBlock:
         maternal_distance = distances['maternal']
         paternal_distance = distances['paternal']
     
+        # logger.info(f"Mutation on c0 : {mutation_on_c0}")
         if abs(np.min(maternal_distance) - np.min(paternal_distance)) < min_support:
             logger.debug("Ambiguous phasing due to small difference in distances.")
             return None
@@ -538,9 +542,9 @@ class RbMutationBlock:
         child_alleles = filtered_genotypes['Child'].str.split('|', expand=True).astype(int)
 
         # Determine which haplotype carries the mutation
-        # Determine which haplotype carries the mutation
-        mutation_on_c0 = self.mut_config == 1
-        child_mut_hap, child_other_hap = (child_alleles[0], child_alleles[1]) if mutation_on_c0 else (child_alleles[1], child_alleles[0])
+        mutation_on_c0 = (self.mut_config == 1)
+        logger.info(f"Mutation on c0: {mutation_on_c0}")
+        child_mut_hap, child_other_hap = (child_alleles[0], child_alleles[1]) # if mutation_on_c0 else (child_alleles[1], child_alleles[0])
         
         # Check if child haplotypes match parents
         if (child_other_hap == child_mut_hap).all():
@@ -551,6 +555,8 @@ class RbMutationBlock:
             child_other_hap=child_other_hap, child_mut_hap=child_mut_hap, 
             mother_alleles=mother_alleles, father_alleles=father_alleles
         )
+        
+        # logger.info(f"The distances are {distances}")
 
         return self._decide_phase(distances, min_support=1, max_distance=1, mutation_on_c0=mutation_on_c0)
 
@@ -651,7 +657,7 @@ class RbMutationBlock:
         
         # If no perfect match return None
         if min(configurations['c0_from_parent']) > 0  and sum(configurations['c1_from_parent']) > 0:
-            return None
+            return 
         
         # If there is two perfect matches
         if min(configurations['c0_from_parent']) == 0  and min(configurations['c1_from_parent']) == 0:  # When the parent we're looking at can give both haplotypes to the child's haplotypes
@@ -667,15 +673,18 @@ class RbMutationBlock:
                 config_code = 1 if hamming_distance(child_other_hap, parent_alleles[0]) == 0 else 0
             elif hamming_distance(child_other_hap, otherparent_hap) == 0:
                 config_code = 0 if hamming_distance(child_mut_hap, parent_alleles[0]) == 0 else 1
+            else:
+                logger.debug("Not assignable from this block of other parent {otherparent_hap} at pos: {common_pos}")
+                return
 
-                        
+
         # If we can have an uniquely identifiable happlotype
         elif min(configurations['c0_from_parent']) == 0 and min(configurations['c1_from_parent']) > 0:
             config_code = 0
         elif min(configurations['c1_from_parent']) == 0 and min(configurations['c0_from_parent']) > 0:
             config_code = 1
         else:
-            return None
+            return 
 
         # Decide if c0 has the mutation
         # if c0 comes from the parent and has the mutation, the phase is the parent_code
@@ -710,17 +719,9 @@ class RbMutationBlock:
         list_blocks_mother = [genotypes_unrestricted[genotypes_unrestricted.index.isin(set(haplo_blocks_mother[k].positions) & common_positions)]['Mother'].str.split('|', expand=True).astype(int).to_numpy() for k in range(len(haplo_blocks_mother))]
         list_blocks_child = [genotypes_unrestricted[genotypes_unrestricted.index.isin(set(haplo_blocks_child[k].positions) & common_positions)]['Child'].str.split('|', expand=True).astype(int).to_numpy() for k in range(len(haplo_blocks_child))]
         
-        
         # Determine which haplotype carries the mutation
         mutation_on_c0 = (self.mut_config == 1)
         dnm_block_child = list_blocks_child[[k for k, b in enumerate(haplo_blocks_child) if b.contains_mutation][0]]
-    
-        # mut_block_idx_father = [k for k in range(len(haplo_blocks_father)) if haplo_blocks_father[k].contains_mutation]
-        # mut_block_idx_mother = [k for k in range(len(haplo_blocks_mother)) if haplo_blocks_mother[k].contains_mutation]
-
-        # first_block_mother = list_blocks_mother[0]
-        # first_block_father = list_blocks_father[0]
-
         
         ## Create sublist of haploblocks in increasing order of their relative distance to the mutation
     
@@ -728,7 +729,11 @@ class RbMutationBlock:
         combined_blocks_father = generate_super_matrices(list_blocks_father, M_star=list_blocks_father[0])
         combined_blocks_mother = generate_super_matrices(list_blocks_mother, M_star=list_blocks_mother[0])
         
-        if len(combined_blocks_child) > 20 and len(combined_blocks_father) > 20 and len(combined_blocks_mother) > 20:
+        # if len(combined_blocks_child) > 100 and len(combined_blocks_father) > 0 and len(combined_blocks_mother) > 20:
+        #     logger.info("Too many combined blocks. Exiting.")
+        #     return
+        
+        if len(combined_blocks_child) > 200 or len(combined_blocks_father) > 200 and len(combined_blocks_mother) > 200:
             logger.info("Too many combined blocks. Exiting.")
             return
 
@@ -748,7 +753,7 @@ class RbMutationBlock:
                     )
                     phase = self._decide_phase(distances, 1, 1, mutation_on_c0)
                     all_phases.append(phase if phase is not None else 1000)
-        
+        logger.info(f"All possible phases {all_phases}")
         if 0 in all_phases and 1 in all_phases:
             return None
         return 0 if 1 not in all_phases else 1

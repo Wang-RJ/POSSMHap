@@ -1,2 +1,2 @@
 CHROM	POS	Offspring_ID	ParentOfOrigin	Method
-chr11	127401345	2	Maternal	Longest Haploblock Phasing
+chr10	16128133	2	unassigned	-
