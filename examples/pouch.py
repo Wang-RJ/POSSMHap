@@ -286,7 +286,7 @@ class RbMutationBlock:
         if len(haplo_blocks_child) > 5 or len(haplo_blocks_father) > 5 or len(haplo_blocks_mother) > 5:
             k = 2
             while k < min(len(haplo_blocks_child) - 1, len(haplo_blocks_father) - 1, len(haplo_blocks_mother) - 1):
-                logger.info(f"Too many haploblocks. Will restrict to {k} haploblocks")
+                logger.info(f"Restricting combinations to {k} haploblocks/individual")
                 
                 # Restrict to 5 haploblocks
                 haplo_blocks_child_restrict = haplo_blocks_child[:k] + [haplo_blocks_child[-1]]
@@ -298,24 +298,28 @@ class RbMutationBlock:
                 haplo_blocks_father_sorted = sorted(haplo_blocks_father_restrict, key=lambda x: x.start)
                 haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: x.start)
                 
-                logger.info(f"Blocks considered - Child: {len(haplo_blocks_child_restrict)}, Father: {len(haplo_blocks_father_restrict)}, Mother: {len(haplo_blocks_mother_restrict)}")
+                logger.info(f"Number of blocks considered - Child: {len(haplo_blocks_child_restrict)}, Father: {len(haplo_blocks_father_restrict)}, Mother: {len(haplo_blocks_mother_restrict)}")
             
                 # Attempt phasing with restricted blocsk
-                phase = self._attempt_block_chaining(
+                phase, stop_combining  = self._attempt_block_chaining(
                     haplo_blocks_child=haplo_blocks_child_sorted, 
                     haplo_blocks_father=haplo_blocks_father_sorted,
                     haplo_blocks_mother=haplo_blocks_mother_sorted
                 )
                 
-                if phase is not None:
+                if phase is not None and stop_combining == False:
                     self.phase = self._get_explicit_phase(phase)
                     self.phase_method = 'Block Chaining Method'
                     logger.info(f"Found phase: {self.phase} using method: {self.phase_method} with {k} blocks")
                     return
-
-                logger.info(f"Phasing unsuccessful. Number of block used {k}")
-                k += 1
-           
+                
+                
+                # If number of blocks reached
+                if stop_combining == True:
+                    logger.info(f"Phasing unsuccessful. Limit number of combined blocks (200) reached. Number of singular blocks used {k}")
+                    return
+                logger.info(f"Phasing unsuccessful. Found confusing phases. Number of block used {k}")
+                k += 1           
         else:
             # Sort all haploblocks if restriction is unnecessary
             haplo_blocks_child_sorted = sorted(haplo_blocks_child, key=lambda x: x.start)
@@ -704,6 +708,7 @@ class RbMutationBlock:
         - int or None: Phase value.
         
         """
+        stop_combine = False
         # Make a copy of the genotypes and haploblocks
         genotypes_unrestricted = self.genotypes_unrestricted.copy()
         genotypes_unrestricted.set_index('POS', inplace=True)
@@ -734,11 +739,11 @@ class RbMutationBlock:
         #     return
         
         if len(combined_blocks_child) > 200 or len(combined_blocks_father) > 200 and len(combined_blocks_mother) > 200:
-            logger.info("Too many combined blocks. Exiting.")
-            return
+            logger.info("Too many combined block")
+            stop_combine = True
+            return None, stop_combine
 
         all_phases = []
-        all_distances = []
         logger.info("Done generating combined blocks for each individuals, preparing to generate combinations....")
         logger.info(f"Number of combined blocks in the child is {len(combined_blocks_child)}")
         logger.info(f"Number of combined blocks for the mother is {len(combined_blocks_mother)}")
@@ -753,10 +758,13 @@ class RbMutationBlock:
                     )
                     phase = self._decide_phase(distances, 1, 1, mutation_on_c0)
                     all_phases.append(phase if phase is not None else 1000)
-        logger.info(f"All possible phases {all_phases}")
-        if 0 in all_phases and 1 in all_phases:
-            return None
-        return 0 if 1 not in all_phases else 1
+                    if 0 in all_phases and 1 in all_phases:
+                        return None, False
+        # logger.info(f"All possible phases {all_phases}")
+        if 1 not in all_phases and 0 in all_phases:
+            return 0, False
+        elif 0 not in all_phases and 1 in all_phases:
+            return 1, False
         
            
 
