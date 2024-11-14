@@ -87,7 +87,7 @@ class RbMutationBlock:
         haplo_blocks_unrestricted = haplo_blocks_unrestricted.rename(columns={"Child": "Child_haploblock", "Father": "Father_haploblock", "Mother": "Mother_haploblock"})
         merged_df = pd.merge(genotypes_unrestricted, haplo_blocks_unrestricted, on="POS", suffixes=("_genotype", "_haploblock"))
         merged_df.to_csv(f"gt-hb-{self.mut_locus}.csv", sep="\t")
-        
+
        
         if genotypes is None or haplo_blocks['Child'].isna().all():
             logger.debug(f"Missing haploblocks for {self.mut_locus} for the Child. Exiting import.")
@@ -289,6 +289,14 @@ class RbMutationBlock:
         haplo_blocks_father = [b for b in haplo_blocks_info['Father']['blocks']] + [haplo_blocks_info['Father']['dnm_block']] 
         haplo_blocks_mother = [b for b in haplo_blocks_info['Mother']['blocks']] + [haplo_blocks_info['Mother']['dnm_block']]
         
+        logger.info(f"Number of combinable blocks for father is {len(haplo_blocks_father)}")
+        logger.info(f"Number of combinable blocks for mother is {len(haplo_blocks_mother)}")
+        logger.info(f"Number of combinable blocks for child is {len(haplo_blocks_child)}")
+        
+        logger.info(f"The IDs of combinable blocks for father is {[b.id for b in haplo_blocks_father]}")
+        logger.info(f"The IDs of combinable blocks for mother is {[b.id for b in haplo_blocks_mother]}")
+        logger.info(f"The IDs of combinable blocks for child is {[b.id for b in haplo_blocks_child]}")
+        
         if len(haplo_blocks_child) > 5 or len(haplo_blocks_father) > 5 or len(haplo_blocks_mother) > 5:
             k = 2
             while k < min(len(haplo_blocks_child) - 1, len(haplo_blocks_father) - 1, len(haplo_blocks_mother) - 1):
@@ -303,6 +311,11 @@ class RbMutationBlock:
                 haplo_blocks_mother_sorted = sorted(haplo_blocks_mother_restrict, key=lambda x: x.start)
                 haplo_blocks_father_sorted = sorted(haplo_blocks_father_restrict, key=lambda x: x.start)
                 haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: x.start)
+                
+                # Print out the blocks used
+                logger.info(f"Blocks IDs used for child: {[b.id for b in haplo_blocks_child_restrict]}")
+                logger.info(f"Blocks IDs used for father: {[b.id for b in haplo_blocks_father_restrict]}")
+                logger.info(f"Blocks IDs used for mother: {[b.id for b in haplo_blocks_mother_restrict]}")
                 
                 logger.info(f"Number of blocks considered - Child: {len(haplo_blocks_child_restrict)}, Father: {len(haplo_blocks_father_restrict)}, Mother: {len(haplo_blocks_mother_restrict)}")
             
