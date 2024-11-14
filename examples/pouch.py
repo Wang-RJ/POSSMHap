@@ -298,9 +298,9 @@ class RbMutationBlock:
         logger.info(f"The IDs of combinable blocks for child is {[b.id for b in haplo_blocks_child]}")
         
         if len(haplo_blocks_child) > 5 or len(haplo_blocks_father) > 5 or len(haplo_blocks_mother) > 5:
-            k = 2
+            k = 1
             while k < min(len(haplo_blocks_child) - 1, len(haplo_blocks_father) - 1, len(haplo_blocks_mother) - 1):
-                logger.info(f"Restricting combinations to {k} haploblocks/individual")
+                logger.info(f"Restricting combinations to {k+1} haploblocks/individual. Including the mutation block")
                 
                 # Restrict to 5 haploblocks
                 haplo_blocks_child_restrict = haplo_blocks_child[:k] + [haplo_blocks_child[-1]]
@@ -738,6 +738,7 @@ class RbMutationBlock:
         positions_father = list(itertools.chain(*[b.positions for b in haplo_blocks_father]))
         positions_mother = list(itertools.chain(*[b.positions for b in haplo_blocks_mother]))
         common_positions = set(positions_child).intersection(positions_father, positions_mother)
+        logger.info(f"The positions used for assigning mutations: {common_positions}")
 
         list_blocks_father = [genotypes_unrestricted[genotypes_unrestricted.index.isin(set(haplo_blocks_father[k].positions) & common_positions)]['Father'].str.split('|', expand=True).astype(int).to_numpy() for k in range(len(haplo_blocks_father))]
         list_blocks_mother = [genotypes_unrestricted[genotypes_unrestricted.index.isin(set(haplo_blocks_mother[k].positions) & common_positions)]['Mother'].str.split('|', expand=True).astype(int).to_numpy() for k in range(len(haplo_blocks_mother))]
@@ -753,9 +754,7 @@ class RbMutationBlock:
         combined_blocks_father = generate_super_matrices(list_blocks_father, M_star=list_blocks_father[0])
         combined_blocks_mother = generate_super_matrices(list_blocks_mother, M_star=list_blocks_mother[0])
         
-        # if len(combined_blocks_child) > 100 and len(combined_blocks_father) > 0 and len(combined_blocks_mother) > 20:
-        #     logger.info("Too many combined blocks. Exiting.")
-        #     return
+       
         
         if len(combined_blocks_child) > 200 or len(combined_blocks_father) > 200 and len(combined_blocks_mother) > 200:
             logger.info("Too many combined block")
