@@ -756,7 +756,6 @@ class RbMutationBlock:
         combined_blocks_mother = generate_super_matrices(list_blocks_mother, M_star=list_blocks_mother[0])
         
        
-        
         if len(combined_blocks_child) > 200 or len(combined_blocks_father) > 200 and len(combined_blocks_mother) > 200:
             logger.info("Too many combined block")
             stop_combine = True
@@ -767,14 +766,20 @@ class RbMutationBlock:
         logger.info(f"Number of combined blocks in the child is {len(combined_blocks_child)}")
         logger.info(f"Number of combined blocks for the mother is {len(combined_blocks_mother)}")
         logger.info(f"Number of combined blocks for the father is {len(combined_blocks_father)}")
+        print()
+        print("Start to assign mutations")
         
         for b_c in combined_blocks_child:
             for b_m in combined_blocks_mother:
                 for b_f in combined_blocks_father:
+                    print("Child: ", b_c)
+                    print("Mother: ", b_m)
+                    print("Father: ", b_f)
                     distances = self._calculate_phasing_distances(
                         child_mut_hap=pd.DataFrame(b_c)[0], child_other_hap=pd.DataFrame(b_c)[1],
                         mother_alleles=pd.DataFrame(b_m), father_alleles=pd.DataFrame(b_f)
                     )
+                    print("Distances: ", distances)
                     phase = self._decide_phase(distances, 1, 1, mutation_on_c0)
                     all_phases.append(phase if phase is not None else 1000)
                     if 0 in all_phases and 1 in all_phases:
