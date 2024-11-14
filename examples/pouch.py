@@ -307,10 +307,13 @@ class RbMutationBlock:
                 haplo_blocks_father_restrict = haplo_blocks_father[:k] + [haplo_blocks_father[-1]]
                 haplo_blocks_mother_restrict = haplo_blocks_mother[:k] + [haplo_blocks_mother[-1]]
             
-                # Sort the blocks by their starting position
-                haplo_blocks_mother_sorted = sorted(haplo_blocks_mother_restrict, key=lambda x: x.start)
-                haplo_blocks_father_sorted = sorted(haplo_blocks_father_restrict, key=lambda x: x.start)
-                haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: x.start)
+                # # Sort the blocks by their starting position
+                # haplo_blocks_mother_sorted = sorted(haplo_blocks_mother_restrict, key=lambda x: x.start)
+                # haplo_blocks_father_sorted = sorted(haplo_blocks_father_restrict, key=lambda x: x.start)
+                # haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: x.start)
+                
+                # Sort the blocks by their relative distance to the mutation ind
+                
                 
                 # Print out the blocks used
                 logger.info(f"Blocks IDs used for child: {[b.id for b in haplo_blocks_child_restrict]}")
@@ -338,7 +341,8 @@ class RbMutationBlock:
                     logger.info(f"Phasing unsuccessful. Limit number of combined blocks (200) reached. Number of singular blocks used {k}")
                     return
                 logger.info(f"Phasing unsuccessful. Found confusing phases. Number of block used {k}")
-                break
+                if k == 3:
+                    break
                 k += 1           
         else:
             # Sort all haploblocks if restriction is unnecessary
@@ -782,6 +786,7 @@ class RbMutationBlock:
                     print("Distances: ", distances)
                     phase = self._decide_phase(distances, 1, 1, mutation_on_c0)
                     all_phases.append(phase if phase is not None else 1000)
+                    print(all_phases)
                     if 0 in all_phases and 1 in all_phases:
                         return None, False
         # logger.info(f"All possible phases {all_phases}")

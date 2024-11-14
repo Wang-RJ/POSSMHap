@@ -65,9 +65,10 @@ def generate_super_matrices(matrices, M_star):
             super_matrix_left = np.vstack(selected_rows)
             super_matrix_right = np.vstack(other_rows)
             super_matrix = np.hstack((super_matrix_left, super_matrix_right))
-            in_super_matrix  = [np.array_equal(super_matrix, m) for m in super_matrices]
-            if len(in_super_matrix) == 0 or not any(in_super_matrix):
-                super_matrices.append(super_matrix)
+            # in_super_matrix  = [np.array_equal(super_matrix, m) for m in super_matrices]
+            # if len(in_super_matrix) == 0 or not any(in_super_matrix):
+            #     super_matrices.append(super_matrix)
+            super_matrices.append(super_matrix)
     print("The combined matrices are : ", super_matrices)
     return super_matrices
 
