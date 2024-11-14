@@ -304,70 +304,109 @@ class RbMutationBlock:
         logger.info(f"The IDs of combinable blocks for mother is {[b.id for b in haplo_blocks_mother_sorted]}")
         logger.info(f"The IDs of combinable blocks for child is {[b.id for b in haplo_blocks_father_sorted]}")
         
-        if len(haplo_blocks_child_sorted) > 5 or len(haplo_blocks_mother_sorted) > 5 or len(haplo_blocks_father_sorted) > 5:
-            k = 1
-            while k < min(len(haplo_blocks_child_sorted) - 1, len(haplo_blocks_mother_sorted) - 1, len(haplo_blocks_father_sorted) - 1):
-                logger.info(f"Restricting combinations to {k+1} haploblocks/individual. Including the mutation block")
+        # Combining blocks using increasing size of number of blocks
+        # ---------------------------------------------------------------------------------------------------------------   
+        # if len(haplo_blocks_child_sorted) > 5 or len(haplo_blocks_mother_sorted) > 5 or len(haplo_blocks_father_sorted) > 5:
+        #     k = 1
+        #     while k < min(len(haplo_blocks_child_sorted) - 1, len(haplo_blocks_mother_sorted) - 1, len(haplo_blocks_father_sorted) - 1):
+        #         logger.info(f"Restricting combinations to {k+1} haploblocks/individual. Including the mutation block")
                 
-                # Restrict to 5 haploblocks
-                haplo_blocks_child_restrict = haplo_blocks_child_sorted[:k] + [haplo_blocks_info['Child']['dnm_block']] 
-                haplo_blocks_father_restrict = haplo_blocks_father_sorted[:k] + [haplo_blocks_info['Father']['dnm_block']] 
-                haplo_blocks_mother_restrict = haplo_blocks_mother_sorted[:k] + [haplo_blocks_info['Mother']['dnm_block']]
+        #         # Restrict to 5 haploblocks
+        #         haplo_blocks_child_restrict = haplo_blocks_child_sorted[:k] + [haplo_blocks_info['Child']['dnm_block']] 
+        #         haplo_blocks_father_restrict = haplo_blocks_father_sorted[:k] + [haplo_blocks_info['Father']['dnm_block']] 
+        #         haplo_blocks_mother_restrict = haplo_blocks_mother_sorted[:k] + [haplo_blocks_info['Mother']['dnm_block']]
             
-                # # Sort the blocks by their starting position
-                # haplo_blocks_mother_sorted = sorted(haplo_blocks_mother_restrict, key=lambda x: x.start)
-                # haplo_blocks_father_sorted = sorted(haplo_blocks_father_restrict, key=lambda x: x.start)
-                # haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: x.start)
+        #         # # Sort the blocks by their starting position
+        #         # haplo_blocks_mother_sorted = sorted(haplo_blocks_mother_restrict, key=lambda x: x.start)
+        #         # haplo_blocks_father_sorted = sorted(haplo_blocks_father_restrict, key=lambda x: x.start)
+        #         # haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: x.start)
                               
                 
-                # Print out the blocks used
-                logger.info(f"Blocks IDs used for child: {[b.id for b in haplo_blocks_child_restrict]}")
-                logger.info(f"Blocks IDs used for father: {[b.id for b in haplo_blocks_father_restrict]}")
-                logger.info(f"Blocks IDs used for mother: {[b.id for b in haplo_blocks_mother_restrict]}")
+        #         # Print out the blocks used
+        #         logger.info(f"Blocks IDs used for child: {[b.id for b in haplo_blocks_child_restrict]}")
+        #         logger.info(f"Blocks IDs used for father: {[b.id for b in haplo_blocks_father_restrict]}")
+        #         logger.info(f"Blocks IDs used for mother: {[b.id for b in haplo_blocks_mother_restrict]}")
                 
-                logger.info(f"Number of blocks considered - Child: {len(haplo_blocks_child_restrict)}, Father: {len(haplo_blocks_father_restrict)}, Mother: {len(haplo_blocks_mother_restrict)}")
+        #         logger.info(f"Number of blocks considered - Child: {len(haplo_blocks_child_restrict)}, Father: {len(haplo_blocks_father_restrict)}, Mother: {len(haplo_blocks_mother_restrict)}")
             
-                # Attempt phasing with restricted blocsk
-                phase, stop_combining  = self._attempt_block_chaining(
-                    haplo_blocks_child=haplo_blocks_child_restrict, 
-                    haplo_blocks_father=haplo_blocks_father_restrict,
-                    haplo_blocks_mother=haplo_blocks_mother_restrict
-                )
+        #         # Attempt phasing with restricted blocsk
+        #         phase, stop_combining  = self._attempt_block_chaining(
+        #             haplo_blocks_child=haplo_blocks_child_restrict, 
+        #             haplo_blocks_father=haplo_blocks_father_restrict,
+        #             haplo_blocks_mother=haplo_blocks_mother_restrict
+        #         )
                 
-                if phase is not None and stop_combining == False:
-                    self.phase = self._get_explicit_phase(phase)
-                    self.phase_method = 'Block Chaining Method'
-                    logger.info(f"Found phase: {self.phase} using method: {self.phase_method} with {k} blocks")
-                    return
+        #         if phase is not None and stop_combining == False:
+        #             self.phase = self._get_explicit_phase(phase)
+        #             self.phase_method = 'Block Chaining Method'
+        #             logger.info(f"Found phase: {self.phase} using method: {self.phase_method} with {k} blocks")
+        #             return
                 
                 
-                # If number of blocks reached
-                if stop_combining == True:
-                    logger.info(f"Phasing unsuccessful. Limit number of combined blocks (200) reached. Number of singular blocks used {k}")
-                    return
-                logger.info(f"Phasing unsuccessful. Found confusing phases. Number of block used {k}")
-                k += 1           
-        else:
-            # Sort all haploblocks if restriction is unnecessary
-            haplo_blocks_child_sorted = haplo_blocks_child_sorted + [haplo_blocks_info['Child']['dnm_block']] 
-            haplo_blocks_father_sorted = haplo_blocks_father_sorted + [haplo_blocks_info['Father']['dnm_block']] 
-            haplo_blocks_mother_sorted = haplo_blocks_mother_sorted + [haplo_blocks_info['Mother']['dnm_block']] 
+        #         # If number of blocks reached
+        #         if stop_combining == True:
+        #             logger.info(f"Phasing unsuccessful. Limit number of combined blocks (200) reached. Number of singular blocks used {k}")
+        #             return
+        #         logger.info(f"Phasing unsuccessful. Found confusing phases. Number of block used {k}")
+        #         k += 1           
+        # else:
+        #     # Sort all haploblocks if restriction is unnecessary
+        #     haplo_blocks_child_sorted = haplo_blocks_child_sorted + [haplo_blocks_info['Child']['dnm_block']] 
+        #     haplo_blocks_father_sorted = haplo_blocks_father_sorted + [haplo_blocks_info['Father']['dnm_block']] 
+        #     haplo_blocks_mother_sorted = haplo_blocks_mother_sorted + [haplo_blocks_info['Mother']['dnm_block']] 
                    
                 
         
-            phase, stop_combining = self._attempt_block_chaining(
-                haplo_blocks_child=haplo_blocks_child_sorted, 
-                haplo_blocks_father=haplo_blocks_father_sorted,
-                haplo_blocks_mother=haplo_blocks_mother_sorted
+        #     phase, stop_combining = self._attempt_block_chaining(
+        #         haplo_blocks_child=haplo_blocks_child_sorted, 
+        #         haplo_blocks_father=haplo_blocks_father_sorted,
+        #         haplo_blocks_mother=haplo_blocks_mother_sorted
+        #     )
+            
+        #     if phase is not None:
+        #         self.phase = self._get_explicit_phase(phase)
+        #         self.phase_method = 'Block Chaining Method'
+        #         logger.info(f"Found phase: {self.phase} using method: {self.phase_method}.")
+        #         return
+
+        #     logger.info(f"Phasing unsuccessful.")
+        
+        # ---------------------------------------------------------------------------------------------------------------
+        # Phasing using pairwise combinations of haploblocks
+        logger.info("Phasing using pairwise combinations of haploblocks")
+        for k in range( min(len(haplo_blocks_child_sorted), len(haplo_blocks_father_sorted), len(haplo_blocks_mother_sorted))):
+            haplo_blocks_child_restrict = haplo_blocks_child_sorted[k] + [haplo_blocks_info['Child']['dnm_block']] 
+            haplo_blocks_father_restrict = haplo_blocks_father_sorted[k] + [haplo_blocks_info['Father']['dnm_block']] 
+            haplo_blocks_mother_restrict = haplo_blocks_mother_sorted[k] + [haplo_blocks_info['Mother']['dnm_block']]
+        
+            # Print out the blocks used
+            logger.info(f"Blocks IDs used for child: {[b.id for b in haplo_blocks_child_restrict]}")
+            logger.info(f"Blocks IDs used for father: {[b.id for b in haplo_blocks_father_restrict]}")
+            logger.info(f"Blocks IDs used for mother: {[b.id for b in haplo_blocks_mother_restrict]}")
+            
+            logger.info(f"Number of blocks considered - Child: {len(haplo_blocks_child_restrict)}, Father: {len(haplo_blocks_father_restrict)}, Mother: {len(haplo_blocks_mother_restrict)}")
+        
+            # Attempt phasing with restricted blocsk
+            phase, stop_combining  = self._attempt_block_chaining(
+                haplo_blocks_child=haplo_blocks_child_restrict, 
+                haplo_blocks_father=haplo_blocks_father_restrict,
+                haplo_blocks_mother=haplo_blocks_mother_restrict
             )
             
-            if phase is not None:
+            if phase is not None and stop_combining == False:
                 self.phase = self._get_explicit_phase(phase)
                 self.phase_method = 'Block Chaining Method'
-                logger.info(f"Found phase: {self.phase} using method: {self.phase_method}.")
+                logger.info(f"Found phase: {self.phase} using method: {self.phase_method} with {k} blocks")
                 return
-
-            logger.info(f"Phasing unsuccessful.")
+            
+            
+            # If number of blocks reached
+            if stop_combining == True:
+                logger.info(f"Phasing unsuccessful. Limit number of combined blocks (200) reached. Number of singular blocks used {k}")
+                return
+            logger.info(f"Phasing unsuccessful. Found confusing phases. Number of block used {k}")
+            k += 1           
+        
 
     def _calculate_phasing_distances(self, child_mut_hap, child_other_hap, mother_alleles, father_alleles):
         """
