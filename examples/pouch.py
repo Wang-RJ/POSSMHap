@@ -313,7 +313,9 @@ class RbMutationBlock:
                 # haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: x.start)
                 
                 # Sort the blocks by their relative distance to the mutation ind
-                
+                haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: abs(x.start - mut_pos))
+                haplo_blocks_father_sorted = sorted(haplo_blocks_father_restrict, key=lambda x: abs(x.start - mut_pos))
+                haplo_blocks_mother_sorted = sorted(haplo_blocks_mother_restrict, key=lambda x: abs(x.start - mut_pos))                
                 
                 # Print out the blocks used
                 logger.info(f"Blocks IDs used for child: {[b.id for b in haplo_blocks_child_restrict]}")
