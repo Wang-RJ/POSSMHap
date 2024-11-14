@@ -124,7 +124,7 @@ class RbMutationBlock:
             region.loc[mutpos_match, "Child"] = region.loc[mutpos_match, "Child"].apply(
                 lambda x: x.split(":")[0] + ":MUT_BLOCK"
             )
-            logger.info(f"Adding MUT_BLOCK to Child. Missing DNM block associated with the De novo positions for: {mut_chrom} {mut_pos}")
+            logger.debug(f"Adding MUT_BLOCK to Child. Missing DNM block associated with the De novo positions for: {mut_chrom} {mut_pos}")
 
         # Get the index of de novo
         mutpos_index = region.index[region["POS"] == mut_pos].tolist()
@@ -375,9 +375,9 @@ class RbMutationBlock:
         # Phasing using pairwise combinations of haploblocks
         logger.info("Phasing using pairwise combinations of haploblocks")
         for k in range( min(len(haplo_blocks_child_sorted), len(haplo_blocks_father_sorted), len(haplo_blocks_mother_sorted))):
-            haplo_blocks_child_restrict = haplo_blocks_child_sorted[k] + [haplo_blocks_info['Child']['dnm_block']] 
-            haplo_blocks_father_restrict = haplo_blocks_father_sorted[k] + [haplo_blocks_info['Father']['dnm_block']] 
-            haplo_blocks_mother_restrict = haplo_blocks_mother_sorted[k] + [haplo_blocks_info['Mother']['dnm_block']]
+            haplo_blocks_child_restrict = [haplo_blocks_child_sorted[k]] + [haplo_blocks_info['Child']['dnm_block']] 
+            haplo_blocks_father_restrict = [haplo_blocks_father_sorted[k]] + [haplo_blocks_info['Father']['dnm_block']] 
+            haplo_blocks_mother_restrict = [haplo_blocks_mother_sorted[k]] + [haplo_blocks_info['Mother']['dnm_block']]
         
             # Print out the blocks used
             logger.info(f"Blocks IDs used for child: {[b.id for b in haplo_blocks_child_restrict]}")
