@@ -80,6 +80,9 @@ class RbMutationBlock:
         genotypes_unrestricted, haplo_blocks_unrestricted = self._identify_haploblocks(region, only_mut=False, longest_individual=None)
         self.genotypes_unrestricted = genotypes_unrestricted
         self.haplo_blocks_unrestricted = haplo_blocks_unrestricted
+        
+        # Write to csv the genotypes unrestricted and haploblock unrestricted
+        
        
         if genotypes is None or haplo_blocks['Child'].isna().all():
             logger.debug(f"Missing haploblocks for {self.mut_locus} for the Child. Exiting import.")
@@ -114,12 +117,10 @@ class RbMutationBlock:
             region.loc[mutpos_match, "Child"] = region.loc[mutpos_match, "Child"].apply(
                 lambda x: x.split(":")[0] + ":MUT_BLOCK"
             )
-            logger.info("Missing DNM block associated with the De novo positions for: {mut_chrom} {mut_pos}")
+            logger.info(f"Adding MUT_BLOCK to Child. Missing DNM block associated with the De novo positions for: {mut_chrom} {mut_pos}")
 
         # Get the index of de novo
         mutpos_index = region.index[region["POS"] == mut_pos].tolist()
-        
-        
         mutblock = region.loc[mutpos_index[0], "Child"].split(":")[1]
         
         if mutblock not in [".", None]: 
