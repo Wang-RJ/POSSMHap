@@ -338,6 +338,7 @@ class RbMutationBlock:
                     logger.info(f"Phasing unsuccessful. Limit number of combined blocks (200) reached. Number of singular blocks used {k}")
                     return
                 logger.info(f"Phasing unsuccessful. Found confusing phases. Number of block used {k}")
+                break
                 k += 1           
         else:
             # Sort all haploblocks if restriction is unnecessary
