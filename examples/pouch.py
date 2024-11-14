@@ -82,6 +82,11 @@ class RbMutationBlock:
         self.haplo_blocks_unrestricted = haplo_blocks_unrestricted
         
         # Write to csv the genotypes unrestricted and haploblock unrestricted
+        # First concatenate genotype and haploblock
+        genotypes_unrestricted = genotypes_unrestricted.rename(columns={"Child": "Child_genotype", "Father": "Father_genotype", "Mother": "Mother_genotype"})
+        haplo_blocks_unrestricted = haplo_blocks_unrestricted.rename(columns={"Child": "Child_haploblock", "Father": "Father_haploblock", "Mother": "Mother_haploblock"})
+        merged_df = pd.merge(genotypes_unrestricted, haplo_blocks_unrestricted, on="POS", suffixes=("_genotype", "_haploblock"))
+        pd.to_csv(merged_df, f"gt-hb-{self.mut_locus}.csv", sep="\t")
         
        
         if genotypes is None or haplo_blocks['Child'].isna().all():
