@@ -29,9 +29,9 @@ def generate_super_matrices(matrices, M_star):
     super_matrices = []
 
     print("Number of matrices to combine : ", n)
-    if n > 20:
-        print("Too many combinations to consider")
-        return super_matrices
+    # if n > 20:
+    #     print("Too many combinations to consider")
+    #     return super_matrices
 
     # Generate all combinations (binary choices of columns) except for M_star
     if M_star is not None:
@@ -68,6 +68,7 @@ def generate_super_matrices(matrices, M_star):
             in_super_matrix  = [np.array_equal(super_matrix, m) for m in super_matrices]
             if len(in_super_matrix) == 0 or not any(in_super_matrix):
                 super_matrices.append(super_matrix)
+    print("The combined matrices are : ", super_matrices)
     return super_matrices
 
 # # Generate all super matrices
