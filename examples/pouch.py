@@ -61,7 +61,9 @@ class RbMutationBlock:
 
         # Step 2: Extract mutation configuration
         self.mut_config, mut_block_id = self._extract_mutation_config(region)
-        if mut_block_id is None:
+        # if mut_block_id is None:
+        print(f"Mutation block id {mut_block_id}")
+        if mut_block_id is None or mut_block_id == "MUT_BLOCK":
             logger.debug("Mutation block ID for the Child is None. Exiting import.")
             self.phase = "Missing DNM block"
             return
@@ -285,37 +287,38 @@ class RbMutationBlock:
         logger.info("Method 3: Attempt block chaining method")
      
         # Sort the blocks by their starting position
-        haplo_blocks_child = [b for b in haplo_blocks_info['Child']['blocks']] + [haplo_blocks_info['Child']['dnm_block']] #.sort(key=lambda x: x.start)
-        haplo_blocks_father = [b for b in haplo_blocks_info['Father']['blocks']] + [haplo_blocks_info['Father']['dnm_block']] 
-        haplo_blocks_mother = [b for b in haplo_blocks_info['Mother']['blocks']] + [haplo_blocks_info['Mother']['dnm_block']]
+        haplo_blocks_child = [b for b in haplo_blocks_info['Child']['blocks']] #.sort(key=lambda x: x.start)
+        haplo_blocks_father = [b for b in haplo_blocks_info['Father']['blocks']] 
+        haplo_blocks_mother = [b for b in haplo_blocks_info['Mother']['blocks']] 
+        # Sort the blocks by their relative positions to the dnm pos
+        haplo_blocks_child_sorted = sorted(haplo_blocks_child, key=lambda x: abs(x.start - mut_pos))
+        haplo_blocks_father_sorted = sorted(haplo_blocks_father, key=lambda x: abs(x.start - mut_pos))
+        haplo_blocks_mother_sorted = sorted(haplo_blocks_mother, key=lambda x: abs(x.start - mut_pos))         
+        
         
         logger.info(f"Number of combinable blocks for father is {len(haplo_blocks_father)}")
         logger.info(f"Number of combinable blocks for mother is {len(haplo_blocks_mother)}")
         logger.info(f"Number of combinable blocks for child is {len(haplo_blocks_child)}")
         
-        logger.info(f"The IDs of combinable blocks for father is {[b.id for b in haplo_blocks_father]}")
-        logger.info(f"The IDs of combinable blocks for mother is {[b.id for b in haplo_blocks_mother]}")
-        logger.info(f"The IDs of combinable blocks for child is {[b.id for b in haplo_blocks_child]}")
+        logger.info(f"The IDs of combinable blocks for father is {[b.id for b in haplo_blocks_child_sorted]}")
+        logger.info(f"The IDs of combinable blocks for mother is {[b.id for b in haplo_blocks_mother_sorted]}")
+        logger.info(f"The IDs of combinable blocks for child is {[b.id for b in haplo_blocks_father_sorted]}")
         
-        if len(haplo_blocks_child) > 5 or len(haplo_blocks_father) > 5 or len(haplo_blocks_mother) > 5:
+        if len(haplo_blocks_child_sorted) > 5 or len(haplo_blocks_mother_sorted) > 5 or len(haplo_blocks_father_sorted) > 5:
             k = 1
-            while k < min(len(haplo_blocks_child) - 1, len(haplo_blocks_father) - 1, len(haplo_blocks_mother) - 1):
+            while k < min(len(haplo_blocks_child_sorted) - 1, len(haplo_blocks_mother_sorted) - 1, len(haplo_blocks_father_sorted) - 1):
                 logger.info(f"Restricting combinations to {k+1} haploblocks/individual. Including the mutation block")
                 
                 # Restrict to 5 haploblocks
-                haplo_blocks_child_restrict = haplo_blocks_child[:k] + [haplo_blocks_child[-1]]
-                haplo_blocks_father_restrict = haplo_blocks_father[:k] + [haplo_blocks_father[-1]]
-                haplo_blocks_mother_restrict = haplo_blocks_mother[:k] + [haplo_blocks_mother[-1]]
+                haplo_blocks_child_restrict = haplo_blocks_child_sorted[:k] + [haplo_blocks_info['Child']['dnm_block']] 
+                haplo_blocks_father_restrict = haplo_blocks_father_sorted[:k] + [haplo_blocks_info['Father']['dnm_block']] 
+                haplo_blocks_mother_restrict = haplo_blocks_mother_sorted[:k] + [haplo_blocks_info['Mother']['dnm_block']]
             
                 # # Sort the blocks by their starting position
                 # haplo_blocks_mother_sorted = sorted(haplo_blocks_mother_restrict, key=lambda x: x.start)
                 # haplo_blocks_father_sorted = sorted(haplo_blocks_father_restrict, key=lambda x: x.start)
                 # haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: x.start)
-                
-                # Sort the blocks by their relative distance to the mutation ind
-                haplo_blocks_child_sorted = sorted(haplo_blocks_child_restrict, key=lambda x: abs(x.start - mut_pos))
-                haplo_blocks_father_sorted = sorted(haplo_blocks_father_restrict, key=lambda x: abs(x.start - mut_pos))
-                haplo_blocks_mother_sorted = sorted(haplo_blocks_mother_restrict, key=lambda x: abs(x.start - mut_pos))                
+                              
                 
                 # Print out the blocks used
                 logger.info(f"Blocks IDs used for child: {[b.id for b in haplo_blocks_child_restrict]}")
@@ -326,9 +329,9 @@ class RbMutationBlock:
             
                 # Attempt phasing with restricted blocsk
                 phase, stop_combining  = self._attempt_block_chaining(
-                    haplo_blocks_child=haplo_blocks_child_sorted, 
-                    haplo_blocks_father=haplo_blocks_father_sorted,
-                    haplo_blocks_mother=haplo_blocks_mother_sorted
+                    haplo_blocks_child=haplo_blocks_child_restrict, 
+                    haplo_blocks_father=haplo_blocks_father_restrict,
+                    haplo_blocks_mother=haplo_blocks_mother_restrict
                 )
                 
                 if phase is not None and stop_combining == False:
@@ -343,16 +346,16 @@ class RbMutationBlock:
                     logger.info(f"Phasing unsuccessful. Limit number of combined blocks (200) reached. Number of singular blocks used {k}")
                     return
                 logger.info(f"Phasing unsuccessful. Found confusing phases. Number of block used {k}")
-                if k == 3:
-                    break
                 k += 1           
         else:
             # Sort all haploblocks if restriction is unnecessary
-            haplo_blocks_child_sorted = sorted(haplo_blocks_child, key=lambda x: x.start)
-            haplo_blocks_father_sorted = sorted(haplo_blocks_father, key=lambda x: x.start)
-            haplo_blocks_mother_sorted = sorted(haplo_blocks_mother, key=lambda x: x.start)
+            haplo_blocks_child_sorted = haplo_blocks_child_sorted + [haplo_blocks_info['Child']['dnm_block']] 
+            haplo_blocks_father_sorted = haplo_blocks_father_sorted + [haplo_blocks_info['Father']['dnm_block']] 
+            haplo_blocks_mother_sorted = haplo_blocks_mother_sorted + [haplo_blocks_info['Mother']['dnm_block']] 
+                   
+                
         
-            phase = self._attempt_block_chaining(
+            phase, stop_combining = self._attempt_block_chaining(
                 haplo_blocks_child=haplo_blocks_child_sorted, 
                 haplo_blocks_father=haplo_blocks_father_sorted,
                 haplo_blocks_mother=haplo_blocks_mother_sorted
@@ -767,7 +770,7 @@ class RbMutationBlock:
             stop_combine = True
             return None, stop_combine
 
-        all_phases = []
+        all_phases = set()
         logger.info("Done generating combined blocks for each individuals, preparing to generate combinations....")
         logger.info(f"Number of combined blocks in the child is {len(combined_blocks_child)}")
         logger.info(f"Number of combined blocks for the mother is {len(combined_blocks_mother)}")
@@ -778,25 +781,30 @@ class RbMutationBlock:
         for b_c in combined_blocks_child:
             for b_m in combined_blocks_mother:
                 for b_f in combined_blocks_father:
-                    print("Child: ", b_c)
-                    print("Mother: ", b_m)
-                    print("Father: ", b_f)
+                    # print("Child: ", b_c)
+                    # print("Mother: ", b_m)
+                    # print("Father: ", b_f)
                     distances = self._calculate_phasing_distances(
                         child_mut_hap=pd.DataFrame(b_c)[0], child_other_hap=pd.DataFrame(b_c)[1],
                         mother_alleles=pd.DataFrame(b_m), father_alleles=pd.DataFrame(b_f)
                     )
-                    print("Distances: ", distances)
                     phase = self._decide_phase(distances, 1, 1, mutation_on_c0)
-                    all_phases.append(phase if phase is not None else 1000)
-                    print(all_phases)
+                    # all_phases.append(phase if phase is not None else 1000)
+                    all_phases.add(phase if phase is not None else 1000)
+                    
                     if 0 in all_phases and 1 in all_phases:
                         return None, False
-        # logger.info(f"All possible phases {all_phases}")
+                    else:
+                        pass
+                
+            
+        logger.info(f"All possible phases {all_phases}")
         if 1 not in all_phases and 0 in all_phases:
             return 0, False
         elif 0 not in all_phases and 1 in all_phases:
             return 1, False
-        
+        # Default return value
+        return None, False
            
 
     def _get_explicit_phase(self, phase):

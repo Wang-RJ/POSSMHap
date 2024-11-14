@@ -68,8 +68,12 @@ def generate_super_matrices(matrices, M_star):
             # in_super_matrix  = [np.array_equal(super_matrix, m) for m in super_matrices]
             # if len(in_super_matrix) == 0 or not any(in_super_matrix):
             #     super_matrices.append(super_matrix)
+            
+            # Avoid adding redundant matrices
+            if not any(np.array_equal(super_matrix, existing) for existing in super_matrices):
+                super_matrices.append(super_matrix)
             super_matrices.append(super_matrix)
-    print("The combined matrices are : ", super_matrices)
+    # print("The combined matrices are : ", super_matrices)
     return super_matrices
 
 # # Generate all super matrices
