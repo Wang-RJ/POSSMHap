@@ -62,14 +62,14 @@ class RbMutationBlock:
         
         # Step 1: Filter the region around the mutation
         region = self._filter_region(phase_df)
-        # region.to_csv("before_df.csv", sep="\t", index=False)
 
         # Step 2: Extract mutation configuration
         self.mut_config, mut_block_id = self._extract_mutation_config(region)
         print(f"Mutation block id {mut_block_id}")
         if mut_block_id is None or mut_block_id == "MUT_BLOCK":
             logger.debug("Mutation block ID for the Child is None. Exiting import.")
-            self.phase = "Missing DNM block"
+            
+            # self.phase = "Missing DNM block"
             return
         
         # Step 3: Identify haploblocks

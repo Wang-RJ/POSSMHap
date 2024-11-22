@@ -12,3 +12,4 @@ slurm_output/*
 
 ## Ignore files outside
 pouch.py
+haplotag*
