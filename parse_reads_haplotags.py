@@ -242,6 +242,9 @@ def compare_genotypes(df_prev, df_post, dnm_pos):
 
 if __name__ == "__main__":
     
+    # Only take reads that have good mapping quality
+    mapping_quality_threshold = 30
+    
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Parse VCF-like file and extract specific information.")
     parser.add_argument("--sam_file", type=str, required=True, help="samfile")
@@ -252,6 +255,8 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     sam_file = args.sam_file
+    
+    
     
     # Adjust column index (convert 1-based to 0-based)
     child_column_index = args.child - 1
@@ -274,6 +279,9 @@ if __name__ == "__main__":
         
         # Parse the SAM file
         read_data = parse_sam_file(sam_file, [dnm_pos, next_pos])
+        
+        # Filter reads by mapping quality
+        read_data = {read_name: data for read_name, data in read_data.items() if int(data["mapping_quality"]) >= mapping_quality_threshold}
        
 
         # Analyze allele associations
@@ -300,10 +308,11 @@ if __name__ == "__main__":
         # max_counts_per_haploblock.to_csv("max_counts_per_haploblock.csv", index=False)
         genotype_dnm = compare_genotypes(df_prev=result1, df_post=result2, dnm_pos=args.position)
         # print(df.columns)
-        # if genotype_dnm is not None:         
-        #     original_df = pd.read_csv(args.vcf_file, sep="\t", header=None)
-        #     original_df.columns = ['Chromosome', 'Position', 'Reference', 'Alternative', \
-        #         'Child', 'Father', 'Mother']
+        if genotype_dnm is not None:         
+            original_df = pd.read_csv(args.vcf_file, sep="\t", header=None)
+            original_df.columns = ['Chromosome', 'Position', 'Reference', 'Alternative', \
+                'Child', 'Father', 'Mother']
             
-        #     original_df.loc[(original_df["Position"] == args.position) & (original_df["Chromosome"] == args.chromosome), "Child"] = genotype_dnm[0] + ":" + genotype_dnm[1]  
-        #     print(original_df.loc[(original_df["Position"] == args.position) & (original_df["Chromosome"] == args.chromosome)])
+            original_df.loc[(original_df["Position"] == args.position) & (original_df["Chromosome"] == args.chromosome), "Child"] = genotype_dnm[0] + ":" + genotype_dnm[1]  
+            # print(original_df.loc[(original_df["Position"] == args.position) & (original_df["Chromosome"] == args.chromosome)])
+            print(original_df)
