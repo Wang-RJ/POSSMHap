@@ -177,7 +177,7 @@ def analyze_allele_association(read_data, positions_of_interest):
 
     # Find the maximum count per haploblock
     max_counts_per_haploblock = grouped_counts.loc[grouped_counts.groupby("PS")["Count"].idxmax()]
-    return grouped_counts, max_counts_per_haploblock
+    return df, grouped_counts, max_counts_per_haploblock
 
 def analyze_haploblocks(df_positions, df_haploblock, position_1, position_2):
     """
@@ -231,7 +231,14 @@ def analyze_haploblocks(df_positions, df_haploblock, position_1, position_2):
     return df_positions
         
     # else:
-        
+   
+def compare_genotypes(df_prev, df_post, dnm_pos):
+    ## Given the genotype datafrfame of the positions with the prev, next positions
+    ## Check if they have the same genotypes, if yes, return the genotypes
+    ## If not, return None
+    if df_prev.loc[df_prev["Position"] == dnm_pos, "Genotype"].values[0] == df_post.loc[df_post["Position"] == dnm_pos, "Genotype"].values[0] :
+        return df_prev.loc[df_prev["Position"] == dnm_pos, "Genotype"].values[0], df_prev.loc[df_prev["Position"] == dnm_pos, "Haploblock"].values[0]
+    return None
 
 if __name__ == "__main__":
     
@@ -254,38 +261,49 @@ if __name__ == "__main__":
     if vcf_contents is not None:
         
         df, prev_pos, dnm_pos, next_pos = vcf_contents
-        print(df)
+        print(df) ## Full vcf file with columns like REF and ALT
 
         # Parse the SAM file
         read_data = parse_sam_file(sam_file, [prev_pos, dnm_pos] )
-
         # Analyze allele associations
-        grouped_counts_prev, max_counts_per_haploblock_prev = analyze_allele_association(read_data, [prev_pos, dnm_pos])
-
+        read_alleles_prev, grouped_counts_prev, max_counts_per_haploblock_prev = analyze_allele_association(read_data, [prev_pos, dnm_pos])
+        print(read_alleles_prev)
         # Display results
         print("Grouped Counts by Haploblock:\n", grouped_counts_prev)
-        print("\nMaximum Counts Per Haploblock:\n", max_counts_per_haploblock_prev)
+        # print("\nMaximum Counts Per Haploblock:\n", max_counts_per_haploblock_prev)
         
         # Parse the SAM file
         read_data = parse_sam_file(sam_file, [dnm_pos, next_pos])
+       
 
         # Analyze allele associations
-        grouped_counts_post, max_counts_per_haploblock_post = analyze_allele_association(read_data, [dnm_pos, next_pos])
+        read_alleles_post, grouped_counts_post, max_counts_per_haploblock_post = analyze_allele_association(read_data, [dnm_pos, next_pos])
 
         # Display results
         print("Grouped Counts by Haploblock:\n", grouped_counts_post)
-        print("\nMaximum Counts Per Haploblock:\n", max_counts_per_haploblock_post)
+        # print("\nMaximum Counts Per Haploblock:\n", max_counts_per_haploblock_post)
         
+        
+        ## These will be inputs for the function compare_genotypes
         # Analyze haploblock 1
         result1 = analyze_haploblocks(df_positions=df, df_haploblock=max_counts_per_haploblock_prev, position_1=prev_pos, position_2=dnm_pos)
-        print(result1)
+        # print(result1)
 
         # Analyze haploblock 2
         result2 = analyze_haploblocks(df_positions=df, df_haploblock=max_counts_per_haploblock_post, position_1=dnm_pos, position_2=next_pos)
-        print(result2)
+        # print(result2)
 
         ## Check consistency of genotypes in both
-        print(result1.loc[result1["Position"] == args.position, "Genotype"].values[0] == result2.loc[result2["Position"] == args.position, "Genotype"].values[0])
+        # print(result1.loc[result1["Position"] == args.position, "Genotype"].values[0] == result2.loc[result2["Position"] == args.position, "Genotype"].values[0])
         # Save results to CSV (optional)
         # grouped_counts.to_csv("grouped_allele_ps_counts.csv", index=False)
         # max_counts_per_haploblock.to_csv("max_counts_per_haploblock.csv", index=False)
+        genotype_dnm = compare_genotypes(df_prev=result1, df_post=result2, dnm_pos=args.position)
+        # print(df.columns)
+        # if genotype_dnm is not None:         
+        #     original_df = pd.read_csv(args.vcf_file, sep="\t", header=None)
+        #     original_df.columns = ['Chromosome', 'Position', 'Reference', 'Alternative', \
+        #         'Child', 'Father', 'Mother']
+            
+        #     original_df.loc[(original_df["Position"] == args.position) & (original_df["Chromosome"] == args.chromosome), "Child"] = genotype_dnm[0] + ":" + genotype_dnm[1]  
+        #     print(original_df.loc[(original_df["Position"] == args.position) & (original_df["Chromosome"] == args.chromosome)])
