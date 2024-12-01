@@ -307,7 +307,6 @@ if __name__ == "__main__":
         # grouped_counts.to_csv("grouped_allele_ps_counts.csv", index=False)
         # max_counts_per_haploblock.to_csv("max_counts_per_haploblock.csv", index=False)
         genotype_dnm = compare_genotypes(df_prev=result1, df_post=result2, dnm_pos=args.position)
-        # print(df.columns)
         if genotype_dnm is not None:         
             original_df = pd.read_csv(args.vcf_file, sep="\t", header=None)
             original_df.columns = ['Chromosome', 'Position', 'Reference', 'Alternative', \
@@ -315,4 +314,5 @@ if __name__ == "__main__":
             
             original_df.loc[(original_df["Position"] == args.position) & (original_df["Chromosome"] == args.chromosome), "Child"] = genotype_dnm[0] + ":" + genotype_dnm[1]  
             # print(original_df.loc[(original_df["Position"] == args.position) & (original_df["Chromosome"] == args.chromosome)])
-            print(original_df)
+            # print(original_df)
+            # Write out results over the original_df
