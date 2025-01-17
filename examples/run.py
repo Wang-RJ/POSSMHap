@@ -8,8 +8,10 @@ parser.add_argument("-vcf", help="Full path of the vcf file that were formatted 
 parser.add_argument("-trio_order", help="Order of the trio in the vcf file. e.g., 'Mother,Father,Child'")
 parser.add_argument("-mutation_file", help="Full path of the mutation file in bed format. Default separator is tab. e.g., 'mutations.bed'")
 parser.add_argument("-output", help="Full path of the output file. e.g., 'output.txt'")
-
+parser.add_argument("-window", help="Window size counting from the dnm position towards one direction")
 args = parser.parse_args()
+
+
 
 # Assign arguments to variables
 vcf = args.vcf
@@ -17,6 +19,8 @@ trio_order = args.trio_order.split(",")
 mutation_file = args.mutation_file
 output = args.output
 
+size=int(args.window) * 2 # Make sure the size is doubled of the window
+print("Window size used:", size)
 ## Script to run pouch
 # Import individual read-based phases from Whatshap
 phased_vcf = pd.read_csv(vcf, sep="\t", comment="#", header=None)
@@ -33,7 +37,7 @@ mutations = pd.read_csv(mutation_file, sep="\t")
 
 # Calculate phaseBlock for every mutation
 phase_blocks = [
-        RbMutationBlock(10000, chrom, pos, phased_vcf)
+        RbMutationBlock(size, chrom, pos, phased_vcf)
         for chrom, pos in zip(mutations["CHROM"], mutations["POS"])
     ]
 

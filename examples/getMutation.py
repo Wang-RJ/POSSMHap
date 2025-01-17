@@ -64,7 +64,7 @@ def make_informative_genotypes(genotypes, mut_pos):
 
     return genotypes
 
-def make_informative_haplo_blocks(haplo_blocks, genotypes, contained_positions, any=True):
+def make_informative_haplo_blocks(haplo_blocks, genotypes, contained_positions, any=False):
     # for each row in the haploblocks, check if cell is None
     # if it is, replace with the corresponding genotype
 
@@ -82,11 +82,11 @@ def make_informative_haplo_blocks(haplo_blocks, genotypes, contained_positions, 
                 if (genotypes[genotypes['POS'] == i][parents] == '0|1').values.sum() == 1:
                     haplo_blocks.loc[haplo_blocks['POS'] == i, 'Mother'] = haplo_blocks.loc[haplo_blocks['POS'] == i, 'Child'].values
                     haplo_blocks.loc[haplo_blocks['POS'] == i, 'Father'] = haplo_blocks[haplo_blocks['POS'] == i]['Child'].values
-    if not any :
-        haplo_blocks = haplo_blocks.dropna(how='all')
-    else:
-        haplo_blocks = haplo_blocks.dropna(how='any')
-        
+
+    # if not any :
+    #     haplo_blocks = haplo_blocks.dropna(how='all')
+    # else:
+    #     haplo_blocks = haplo_blocks.dropna(how='any')
     return haplo_blocks          
     
     

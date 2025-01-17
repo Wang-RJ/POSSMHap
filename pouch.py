@@ -482,6 +482,7 @@ class RbMutationBlock:
         mother_block = haplo_info['Mother']['dnm_block']
 
         if not all([child_block, father_block, mother_block]):
+            logger.info("Missing one of the haplotype block in the trio. Exiting... ")
             return None
         
         # Find common positions among the trio
@@ -489,6 +490,11 @@ class RbMutationBlock:
             father_block.positions, mother_block.positions
         )
         if not common_positions:
+            logger.info("No common positions shared between individuals within dnm block")
+            print("Positions considered for the child", sorted(child_block.positions))
+            print("Positions considered for father", sorted(father_block.positions))
+            print("Positions considered for the mother", sorted(mother_block.positions))
+            logger.info("Exiting...")
             return None
         
         # Exclude the mutation position
@@ -496,6 +502,7 @@ class RbMutationBlock:
         genotypes = genotypes[genotypes['POS'].isin(common_positions)]
         
         if genotypes.empty:
+            logger.info("Block only contains the dnm. Exiting...")
             return None
 
         # Extract haplotypes
@@ -526,6 +533,7 @@ class RbMutationBlock:
         
         # Check if child haplotypes match parents
         if (child_other_hap == child_mut_hap).all():
+            logger.info("Child genotype is homozygous. Exiting... ")
             return None  # Can't phase if the child is homozygous
 
         # Determine phase
