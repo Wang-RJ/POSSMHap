@@ -103,43 +103,48 @@ def parse_sam_file(sam_file, positions_of_interest):
     """
     read_data = defaultdict(lambda: {"read1": None, "read2": None})  # Group data by read name
 
-    def parse_cigar(cigar, seq, qual, pos, positions_of_interest):
+    # --------------------------------------------------------------------------------------------------------------------------
+    def parse_cigar(cigar, seq, pos, positions_of_interest):
         """
         Parse the CIGAR string and extract alleles and qualities at specific positions.
         """
+        
         alleles = {}
-        qualities = {}
         read_index = 0
         ref_position = pos
         
-        # Fina all pairs in the CIGAR string
+        # Find all pairs in the CIGAR string
         for match in re.finditer(r"(\d+)([MIDNSHP=X])", cigar):
             length, operation = int(match.group(1)), match.group(2)
-            
             if operation in "M=X":  # Alignment match or mismatch
                 # For each position of interest, see if it lies within this matching block
                 for position in positions_of_interest:
                     if ref_position <= position < ref_position + length:
                         index_in_read = read_index + (position - ref_position)
                         alleles[position] = seq[index_in_read]
-                        qualities[position] = qual[index_in_read]
+                        
                 ref_position += length
-                read_index += length
+                read_index += length # move forward
+                
             elif operation == "I":  # Insertion consumes bases from the read but not the reference
                 read_index += length
             elif operation == "D":  # Deletion
                 ref_position += length
             elif operation in "NSHP":  
-                # N (skipped region), S/H (soft/hard clipping), P (padding)
-                
+                # N (skipped region), S/H (soft/hard clipping), P (padding)   
                 # S/H consume bases from the read; N and P consume reference length
                 if operation in "SH":
                     read_index += length
                 else:
                     ref_position += length
-        return alleles, qualities
-
+                    
+        if len(alleles) >=1:
+            return alleles
+        # ---------------------------------------------------------------------------------------------------------
+        
     with open(sam_file, "r") as f:
+        nb_ps_tag = 0 
+        nb_reads_cv2pos = 0        
         for line in f:
             if line.startswith("@"):
                 continue  # Skip header lines
@@ -150,46 +155,80 @@ def parse_sam_file(sam_file, positions_of_interest):
             pos = int(fields[3])  # 1-based position where alignment starts
             cigar = fields[5]
             seq = fields[9]
-            qual = fields[10]
+            # qual = fields[10]
             mapping_quality = fields[4]  # Mapping quality
             ps_tag = None
             
             # Check if read is mapped to the reverse strand
             # bit 0x10 (16 in decimal) indicates reverse-complemented alignment
-            is_reversed = bool(flag & 0x10)
-            
-            # If the read is reversed, reverse-complement the read sequence
-            # and reverse the quality string so that indexing is consistent
-            # if is_reversed:
-            #     seq = reverse_complement(seq)
-            #     qual = qual[::-1]
-            
+            is_reversed = bool(flag & 0x10)   
 
             # Look for PS tag if present
             for field in fields[11:]:
                 if field.startswith("PS:"):
                     ps_tag = field.split(":")[2]
+                    
+                    # # For the reads that have PS tag
+                    # if ps_tag is not None:
+                    # Parse alleles and qualities at positions of interest
+            alleles = parse_cigar(cigar, seq, pos, positions_of_interest)
+            if alleles : 
+                # Determine if the read is the first or second in the pair
+                if len(alleles) >=2:
+                    allele1 = alleles[min(alleles.keys())] # first position in the pair
+                    allele2 = alleles[max(alleles.keys())] # second position in the pair
+                    
+                    # Fill in first read in pairs
+                    read_data[read_name]["read1"] = {
+                        "start_position": pos,  # Starting position of the read
+                        "alleles": {min(alleles.keys()) : allele1},
+                        "mapping_quality": mapping_quality,
+                        "ps": ps_tag,
+                        "strand": "-" if is_reversed else "+"
+                    }
+                    
+                    # Fill in second read in pair
+                    read_data[read_name]["read2"] = {
+                        "start_position": pos,  # Starting position of the read
+                        "alleles": {max(alleles.keys()): allele2},
+                        "mapping_quality": mapping_quality,
+                        "ps": ps_tag,
+                        "strand": "-" if is_reversed else "+"
+                    }
+                    
+                # Add an allele if only one read found
+                if len(alleles) ==1:                                
+                    allele = alleles[min(alleles.keys())] # position
+                    if read_name in read_data:
+                        if "read1" in read_data[read_name]:
+                            read_data[read_name]["read2"] = {
+                                "start_position": pos,  # Starting position of the read
+                                "alleles": {min(alleles.keys()) : allele},
+                                "mapping_quality": mapping_quality,
+                                "ps": ps_tag,
+                                "strand": "-" if is_reversed else "+"
+                            }
+                        elif "read2"  in read_data[read_name]:
+                            read_data[read_name]["read1"] = {
+                                "start_position": pos,  # Starting position of the read
+                                "alleles": {min(alleles.keys()) : allele},
+                                "mapping_quality": mapping_quality,
+                                "ps": ps_tag,
+                                "strand": "-" if is_reversed else "+"
+                            }
+            
+                    else:
+                        read_data[read_name]["read1"] = {
+                                "start_position": pos,  # Starting position of the read
+                                "alleles": {min(alleles.keys()) : allele},
+                                "mapping_quality": mapping_quality,
+                                "ps": ps_tag,
+                                "strand": "-" if is_reversed else "+"
+                            }
+                        
 
-            # Parse alleles and qualities at positions of interest
-            alleles, qualities = parse_cigar(cigar, seq, qual, pos, positions_of_interest)
 
-            # Determine if the read is the first or second in the pair
-            read_info = {
-                "start_position": pos,  # Starting position of the read
-                "alleles": alleles,
-                "qualities": qualities,
-                "mapping_quality": mapping_quality,
-                "ps": ps_tag,
-                "strand": "-" if is_reversed else "+"
-            }
-
-
-            if flag & 0x40:  # First in pair
-                read_data[read_name]["read1"] = read_info
-            elif flag & 0x80:  # Second in pair
-                read_data[read_name]["read2"] = read_info
-       
-    return read_data
+        return read_data
 
 # Check the allele association between the positions of interest (dnm, informative_snp)
 def analyze_allele_association(read_data, positions_of_interest):
@@ -198,12 +237,15 @@ def analyze_allele_association(read_data, positions_of_interest):
     considering paired-end reads (read1 and read2).
     """
     results = []
-
+    print("Number of reads collected", len(read_data))
     for read_name, data in read_data.items():
         read1 = data.get("read1")
         read2 = data.get("read2")
-                
-        if read1 and read2:
+           
+        if not(read1 and read2):
+            print("No reads covering at least two positions found")     
+        
+        elif read1 and read2:
             alleles1 = read1["alleles"]
             alleles2 = read2["alleles"]
             
@@ -251,6 +293,8 @@ def analyze_allele_association(read_data, positions_of_interest):
         # Find the maximum count per haploblock
         max_counts_per_haploblock = grouped_counts.loc[grouped_counts.groupby("PS")["Count"].idxmax()]
         return df, grouped_counts, max_counts_per_haploblock
+    else:
+        print("Two positions of interest can't not be at the same 2 reads")
 
 # Check the haploblock association between two positions
 def analyze_haploblocks(df_positions, df_haploblock, position_1, position_2):
@@ -274,20 +318,61 @@ def analyze_haploblocks(df_positions, df_haploblock, position_1, position_2):
     
 
     # Extract reference and genotype data
-    reference_1 = df_positions.loc[df_positions["Position"] == position_1, "Reference"].iloc[0]
-    reference_2 = df_positions.loc[df_positions["Position"] == position_2, "Reference"].iloc[0]
+    reference_1 = df_positions.loc[df_positions["Position"] == position_1, "Reference"].iloc[0] # G
+    reference_2 = df_positions.loc[df_positions["Position"] == position_2, "Reference"].iloc[0] # C
     
-    alter_1 = df_positions.loc[df_positions["Position"] == position_1, "Alternative"].iloc[0]
-    alter_2 = df_positions.loc[df_positions["Position"] == position_2, "Alternative"].iloc[0]
+    alter_1 = df_positions.loc[df_positions["Position"] == position_1, "Alternative"].iloc[0] # T
+    alter_2 = df_positions.loc[df_positions["Position"] == position_2, "Alternative"].iloc[0] # C
     
-    genotype_1 = df_positions.loc[df_positions["Position"] == position_1, "Genotype"].iloc[0]
-    genotype_2 = df_positions.loc[df_positions["Position"] == position_2, "Genotype"].iloc[0]
+    genotype_1 = df_positions.loc[df_positions["Position"] == position_1, "Genotype"].iloc[0] # 1|0
+    genotype_2 = df_positions.loc[df_positions["Position"] == position_2, "Genotype"].iloc[0] # 0/1
+    
+    print("Position 1 is:", position_1)
+    print("Reference allele is ", reference_1, "Alternative allele is ", alter_1)
+    print("Genotype of position 1 is:", genotype_1)
+    
+    print("Position 2 is:", position_2)
+    print("Reference allele is ", reference_2, "Alternative allele is ", alter_2)
+    print("Genotype of position 2 is:", genotype_2)
+    
+    
 
     # Check which one is already assigned :
     if "|" in genotype_1 :
-        if (frozenset([reference_1, reference_2]) == merged_alleles) or (frozenset([alter_1, alter_2]) == merged_alleles):
+        
+        # Keep the same genotype
+        if (frozenset([reference_1, reference_2]) == merged_alleles):
+            print("Test homogenous arrangement satisfied")
+            print(f"Allele arrangement found {merged_alleles}")
+            print(f"Genotype before {df_positions.loc[df_positions['Position'] == position_2, 'Genotype']}")
+            print(f"Position {position_2}  genotype after : {genotype_1}")
+            
             df_positions.loc[df_positions["Position"] == position_2, "Genotype"] = genotype_1 
-        elif (frozenset([reference_1, alter_2]) == merged_alleles) or (frozenset([alter_1, reference_2]) == merged_alleles):
+        
+        elif (frozenset([alter_1, alter_2]) == merged_alleles):
+            print("Test homogenous arrangement satisfied")
+            print(f"Allele arrangement found {merged_alleles}")
+            print(f"Genotype before {df_positions.loc[df_positions['Position'] == position_2, 'Genotype']}")
+            print(f"Position {position_2} genotype after : {genotype_1}")
+            
+            df_positions.loc[df_positions["Position"] == position_2, "Genotype"] = genotype_1 
+        
+        # Alternative genotypes    
+        elif (frozenset([reference_1, alter_2]) == merged_alleles) :
+            print("Test reversed arrangement satisfied")
+            print(f"Allele arrangement found {merged_alleles}")
+            print(f"Genotype before {df_positions.loc[df_positions['Position'] == position_2, 'Genotype']}")
+            print(f"Position {position_2} genotype after: {genotype_1[::-1]}")
+            
+            df_positions.loc[df_positions["Position"] == position_2, "Genotype"] = genotype_1[::-1]
+        
+        elif (frozenset([alter_1, reference_2]) == merged_alleles):
+            print("Test reversed arrangement satisfied")
+            print(f"Allele arrangement found {merged_alleles}")
+            print(f"Genotype before {df_positions.loc[df_positions['Position'] == position_2, 'Genotype']}")
+            print(f"Position {position_2} genotype after : {genotype_1[::-1]}")
+
+            
             df_positions.loc[df_positions["Position"] == position_2, "Genotype"] = genotype_1[::-1]
         
         
@@ -303,8 +388,20 @@ def analyze_haploblocks(df_positions, df_haploblock, position_1, position_2):
         
     elif "|" in genotype_2:
         if (frozenset([reference_1, reference_2]) == merged_alleles) or (frozenset([alter_1, alter_2]) == merged_alleles):
+            print("Test homo arrangement satisfied")
+            print(f"Allele arrangement found {merged_alleles}")
+            print(f"Genotype before {df_positions.loc[df_positions['Position'] == position_1, 'Genotype']}")
+            print(f"Position {position_1} genotype after : {genotype_2}")
+            
             df_positions.loc[df_positions["Position"] == position_1, "Genotype"] = genotype_2
+        
+        
         elif (frozenset([reference_1, alter_2]) == merged_alleles) or (frozenset([alter_1, reference_2]) == merged_alleles):
+            print("Test rev arrangement satisfied")
+            print(f"Allele arrangement found {merged_alleles}")
+            print(f"Genotype before {df_positions.loc[df_positions['Position'] == position_1, 'Genotype']}")
+            print(f"Position {position_1} genotype after : {genotype_2[::-1]}")
+            
             df_positions.loc[df_positions["Position"] == position_1, "Genotype"] = genotype_2[::-1]
         
         # if reference_1 == pos_1_allele and pos_2_allele == reference_2:
@@ -332,7 +429,7 @@ def compare_genotypes(df_prev, df_post, dnm_pos):
 if __name__ == "__main__":
     
     # Only take reads that have good mapping quality
-    mapping_quality_threshold = 30
+    mapping_quality_threshold = 10
 
     # Set up argument parser
     parser = argparse.ArgumentParser(description="Parse VCF-like file and extract specific information.")
@@ -345,6 +442,7 @@ if __name__ == "__main__":
     parser.add_argument("--output_filename", type=str, required=True, help="Name of the output file")
     args = parser.parse_args()
     sam_file = args.sam_file
+    failtoinfer=True
     
     # Adjust column index (convert 1-based to 0-based)
     child_column_index = args.child - 1
@@ -353,7 +451,6 @@ if __name__ == "__main__":
     vcf_contents = parse_vcf(args.vcf_file, args.chromosome, args.position, child_column_index)
     
     if vcf_contents is not None:
-        
         df, prev_pos, dnm_pos, next_pos = vcf_contents
         print("prev position:", prev_pos)
         print("post position:", next_pos)
@@ -372,7 +469,6 @@ if __name__ == "__main__":
                         int(data["read1"]["mapping_quality"]) >= mapping_quality_threshold ):
                         filtered_read_data[read_name] = data        
             read_data = filtered_read_data
-            
             # Analyze allele associations using variant position located in front of the dnm position
             prev_allele_association = analyze_allele_association(read_data, [prev_pos, dnm_pos])
             
@@ -396,9 +492,11 @@ if __name__ == "__main__":
                 original_df = original_df[['#CHROM', 'POS', 'Child', 'Father', 'Mother']]
                 # Write out results over the original_df
                 original_df.to_csv(args.out_dir + "/" + args.output_filename, sep="\t", index=False)
+                failtoinfer = False
                 sys.exit(0)  # Exit with a success status code
             else:
-                print(f"Fail to infer allele association using {prev_pos}")        
+                print(f"Fail to infer allele association using {prev_pos}")    
+
         ## Check if next_pos is none or not
         ## ============================================================================================  
         if (next_pos is not None):
@@ -436,80 +534,85 @@ if __name__ == "__main__":
                 original_df = original_df[['#CHROM', 'POS', 'Child', 'Father', 'Mother']]
                 # Write out results over the original_df
                 original_df.to_csv(args.out_dir + "/" + args.output_filename, sep="\t", index=False)
+                failtoinfer = False
                 sys.exit(0)  # Exit with a success status code
             else:
                  print(f"Fail to infer allele association using {next_pos}")     
         
+        ## Message output to state in inference was correct
+        if failtoinfer:
+            print("Read parsing failed. Couldn't find reads that cover at least one of the two positions")
+        
         ## =====================================================================================
         ## Additional condition to check that both are not None        
-        if prev_pos is not None and next_pos is not None:
-            # Parse the SAM file
-            read_data = parse_sam_file(sam_file, [prev_pos, dnm_pos] )
-            # print("Number of reads", len(read_data))
+        # if prev_pos is not None and next_pos is not None:
+        #     # Parse the SAM file
+        #     read_data = parse_sam_file(sam_file, [prev_pos, dnm_pos] )
+        #     # print("Number of reads", len(read_data))
             
-            # Filter reads by mapping quality
-            filtered_read_data = {}
-            for read_name, data in read_data.items():
-                if data["read1"] and data["read2"]:
-                    if (int(data["read2"]["mapping_quality"]) >= mapping_quality_threshold and \
-                        int(data["read1"]["mapping_quality"]) >= mapping_quality_threshold ):
-                        filtered_read_data[read_name] = data        
-            read_data = filtered_read_data
+        #     # Filter reads by mapping quality
+        #     filtered_read_data = {}
+        #     for read_name, data in read_data.items():
+        #         if data["read1"] and data["read2"]:
+        #             if (int(data["read2"]["mapping_quality"]) >= mapping_quality_threshold and \
+        #                 int(data["read1"]["mapping_quality"]) >= mapping_quality_threshold ):
+        #                 filtered_read_data[read_name] = data        
+        #     read_data = filtered_read_data
             
-            # Analyze allele associations
-            prev_allele_association = analyze_allele_association(read_data, [prev_pos, dnm_pos])
-            if prev_allele_association is not None:
-                read_alleles_prev, grouped_counts_prev, max_counts_per_haploblock_prev = prev_allele_association
+        #     # Analyze allele associations
+        #     prev_allele_association = analyze_allele_association(read_data, [prev_pos, dnm_pos])
+        #     if prev_allele_association is not None:
+        #         read_alleles_prev, grouped_counts_prev, max_counts_per_haploblock_prev = prev_allele_association
             
-            # print(read_alleles_prev)
-            # Display results
-            # print("Grouped Counts by Haploblock:\n", grouped_counts_prev)
-            # print("\nMaximum Counts Per Haploblock:\n", max_counts_per_haploblock_prev)
+        #     # print(read_alleles_prev)
+        #     # Display results
+        #     # print("Grouped Counts by Haploblock:\n", grouped_counts_prev)
+        #     # print("\nMaximum Counts Per Haploblock:\n", max_counts_per_haploblock_prev)
             
-            # Parse the SAM file
-            read_data = parse_sam_file(sam_file, [dnm_pos, next_pos])
+        #     # Parse the SAM file
+        #     read_data = parse_sam_file(sam_file, [dnm_pos, next_pos])
                 
-            # Filter reads by mapping quality
-            filtered_read_data = {}
-            for read_name, data in read_data.items():
-                if data["read1"] and data["read2"]:
-                    if (int(data["read2"]["mapping_quality"]) >= mapping_quality_threshold and \
-                        int(data["read1"]["mapping_quality"]) >= mapping_quality_threshold ):
-                        filtered_read_data[read_name] = data        
-            read_data = filtered_read_data
+        #     # Filter reads by mapping quality
+        #     filtered_read_data = {}
+        #     for read_name, data in read_data.items():
+        #         if data["read1"] and data["read2"]:
+        #             if (int(data["read2"]["mapping_quality"]) >= mapping_quality_threshold and \
+        #                 int(data["read1"]["mapping_quality"]) >= mapping_quality_threshold ):
+        #                 filtered_read_data[read_name] = data        
+        #     read_data = filtered_read_data
 
-            # Analyze allele associations
-            next_allele_association = analyze_allele_association(read_data, [dnm_pos, next_pos])
-            if next_allele_association is not None:
-                read_alleles_post, grouped_counts_post, max_counts_per_haploblock_post = next_allele_association
+        #     # Analyze allele associations
+        #     next_allele_association = analyze_allele_association(read_data, [dnm_pos, next_pos])
+        #     if next_allele_association is not None:
+        #         read_alleles_post, grouped_counts_post, max_counts_per_haploblock_post = next_allele_association
 
-            # Display results
-            # print("Grouped Counts by Haploblock:\n", grouped_counts_post)
-            # print("\nMaximum Counts Per Haploblock:\n", max_counts_per_haploblock_post)
+        #     # Display results
+        #     # print("Grouped Counts by Haploblock:\n", grouped_counts_post)
+        #     # print("\nMaximum Counts Per Haploblock:\n", max_counts_per_haploblock_post)
             
             
-            ## These will be inputs for the function compare_genotypes
-            if next_allele_association is not None and prev_allele_association is not None:
-                # Analyze haploblock 1
-                result1 = analyze_haploblocks(df_positions=df, df_haploblock=max_counts_per_haploblock_prev, position_1=prev_pos, position_2=dnm_pos)
+        #     ## These will be inputs for the function compare_genotypes
+        #     if next_allele_association is not None and prev_allele_association is not None:
+        #         # Analyze haploblock 1
+        #         result1 = analyze_haploblocks(df_positions=df, df_haploblock=max_counts_per_haploblock_prev, position_1=prev_pos, position_2=dnm_pos)
 
-                # Analyze haploblock 2
-                result2 = analyze_haploblocks(df_positions=df, df_haploblock=max_counts_per_haploblock_post, position_1=dnm_pos, position_2=next_pos)
+        #         # Analyze haploblock 2
+        #         result2 = analyze_haploblocks(df_positions=df, df_haploblock=max_counts_per_haploblock_post, position_1=dnm_pos, position_2=next_pos)
 
-                ## Check consistency of genotypes in both
-                genotype_dnm = compare_genotypes(df_prev=result1, df_post=result2, dnm_pos=args.position)
-                if genotype_dnm is not None:         
-                    original_df = pd.read_csv(args.vcf_file, sep="\t", header=0)
-                    original_df.columns = ['#CHROM', 'POS', 'Reference', 'Alternative', \
-                        'Child', 'Father', 'Mother']
-                    print(f"Found haploblock for the child using prev pos {prev_pos} and next pos {next_pos}")
-                    original_df.loc[(original_df["POS"] == args.position) & (original_df["#CHROM"] == args.chromosome), "Child"] = genotype_dnm[0] + ":" + genotype_dnm[1]  
-                    print(original_df.loc[(original_df["POS"] == args.position) & (original_df["#CHROM"] == args.chromosome)])
-                    # Select some columns
-                    original_df = original_df[['#CHROM', 'POS', 'Child', 'Father', 'Mother']]
-                    # Write out results over the original_df
-                    original_df.to_csv(args.out_dir + "/" + args.output_filename, sep="\t", index=False)
-            else:
-                print(f"No read at least 2 of the 3 positions (prev_snp, dnm, post_snp) {prev_pos, dnm_pos, next_pos}")
+        #         ## Check consistency of genotypes in both
+        #         genotype_dnm = compare_genotypes(df_prev=result1, df_post=result2, dnm_pos=args.position)
+        #         if genotype_dnm is not None:         
+        #             original_df = pd.read_csv(args.vcf_file, sep="\t", header=0)
+        #             original_df.columns = ['#CHROM', 'POS', 'Reference', 'Alternative', \
+        #                 'Child', 'Father', 'Mother']
+        #             print(f"Found haploblock for the child using prev pos {prev_pos} and next pos {next_pos}")
+        #             original_df.loc[(original_df["POS"] == args.position) & (original_df["#CHROM"] == args.chromosome), "Child"] = genotype_dnm[0] + ":" + genotype_dnm[1]  
+        #             print(original_df.loc[(original_df["POS"] == args.position) & (original_df["#CHROM"] == args.chromosome)])
+        #             # Select some columns
+        #             original_df = original_df[['#CHROM', 'POS', 'Child', 'Father', 'Mother']]
+        #             # Write out results over the original_df
+        #             original_df.to_csv(args.out_dir + "/" + args.output_filename, sep="\t", index=False)
+        #     else:
+        #         print(f"No read at least 2 of the 3 positions (prev_snp, dnm, post_snp) {prev_pos, dnm_pos, next_pos}")
     else:
         print(f"No vcf valid found.")

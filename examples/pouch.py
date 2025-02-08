@@ -49,35 +49,44 @@ class RbMutationBlock:
         Import phase data and process it for phasing.
 
         Parameters:
-        - phase_df (pd.DataFrame): DataFrame containing phased genotypes.
+        - phase_df (pd.DataFrame): DataFrame containing phased genotypes ( haploblocks) of the trio
+        
+        Output:
+        - None
         """
+        
+        
         # Validate input DataFrame
-        required_columns = {'CHROM', 'POS', 'Mother', 'Father', 'Child'}
+        required_columns = {'CHROM', 'POS', 'Mother', 'Father', 'Child'} # The columns included in the matrix
+        
+        # If the columns are not inlcuded, remove them
         if not required_columns.issubset(phase_df.columns):
             raise ValueError(f"phase_df must contain the columns: {', '.join(required_columns)}")
 
         # Step 1: Filter the region around the mutation
+        # ---------------------------------------------------------------------------------------------------------------------------------------
         region = self._filter_region(phase_df)
         logger.info(f"Step 1: Filtering region around the dnm")
         
         # Step 2: Extract mutation configuration
-        logger.info(f"Step 2: Extact mutational configuration")
+        # ---------------------------------------------------------------------------------------------------------------------------------------
+        logger.info(f"Step 2: Extract mutational configuration. Check if mutation was on c0 or c1 of the Child.")
         self.mut_config, mut_block_id = self._extract_mutation_config(region)
         
-        # if mut_block_id is None:
-
+        # If mut_block_id is None, then we cannot phase
         if mut_block_id is None or mut_block_id == "MUT_BLOCK":
             logger.info("Mutation block ID for the Child is None. Exiting import.")
-            ## Need to fix here next - Nov 21st 2024
             self.phase = "Missing DNM block"
             return
         
-        # Step 3: Identify haploblocks
+        # Step 3: Identify haploblocks for the trio
+        # ---------------------------------------------------------------------------------------------------------------------------------------
         logger.info(f"Step 3: Identifying haploblocks")
         genotypes, haplo_blocks = self._identify_haploblocks(region, only_mut=True, longest_individual="Child")
         self.genotypes = genotypes
         self.haplo_blocks = haplo_blocks
         
+        # debug messages
         logger.debug(f"Mutation at {self.mut_locus}")
         logger.debug(f"Genotypes \n{genotypes}")
         logger.debug(f"Haploblocks \n{haplo_blocks}")
@@ -90,14 +99,21 @@ class RbMutationBlock:
         self.genotypes_unrestricted = genotypes_unrestricted
         self.haplo_blocks_unrestricted = haplo_blocks_unrestricted
         
+        ## DEBUG
+        ## ------------------------------------------------------------------------
         # Write to csv the genotypes unrestricted and haploblock unrestricted
         # First concatenate genotype and haploblock
-        genotypes_unrestricted = genotypes_unrestricted.rename(columns={"Child": "Child_genotype", "Father": "Father_genotype", "Mother": "Mother_genotype"})
-        haplo_blocks_unrestricted = haplo_blocks_unrestricted.rename(columns={"Child": "Child_haploblock", "Father": "Father_haploblock", "Mother": "Mother_haploblock"})
-        # merged_df = pd.merge(genotypes_unrestricted, haplo_blocks_unrestricted, on="POS", suffixes=("_genotype", "_haploblock"))
-        
-
-       
+        genotypes_unrestricted = genotypes_unrestricted.rename(
+            columns={"Child": "Child_genotype", 
+            "Father": "Father_genotype", 
+            "Mother": "Mother_genotype"})
+        haplo_blocks_unrestricted = haplo_blocks_unrestricted.rename(
+            columns={"Child": "Child_haploblock", 
+            "Father": "Father_haploblock", 
+            "Mother": "Mother_haploblock"})
+        merged_df = pd.merge(genotypes_unrestricted, haplo_blocks_unrestricted, on="POS", suffixes=("_genotype", "_haploblock"))
+        merged_df.to_csv(f'gthb-{self.mut_locus}.csv')
+        ## -------------------------------------------------------------------
         if genotypes is None or haplo_blocks['Child'].isna().all():
             logger.info(f"Missing haploblocks for {self.mut_locus} for the Child. Exiting import.")
             return
@@ -114,7 +130,7 @@ class RbMutationBlock:
         - phase_df (pd.DataFrame): DataFrame containing phased genotypes.
 
         Returns:
-        - pd.DataFrame: Filtered DataFrame.
+        - pd.DataFrame: Filtered DataFrame that contains only the de novo and the regions around it
         """
         # Mutation location and region size
         mut_chrom, mut_pos = self.mut_locus
@@ -128,8 +144,6 @@ class RbMutationBlock:
         # Remove all the rows that contain weird genotypes
         region = region[~region.apply(lambda row: row.astype(str).str.contains(r'\./\.').any(), axis=1)]
         
-        # Remove rows were
-
         # Make sure mutation position row has valid mutation block if missing
         mutpos_match = region["POS"] == mut_pos
         if region[mutpos_match]["Child"].str.split(":", expand=True)[1].values[0] == ".":
@@ -146,7 +160,8 @@ class RbMutationBlock:
             # Check for adjacent rows
             prev_index, next_index = mutpos_index[0] - 1,  mutpos_index[0] + 1
             
-            # Check if previous/ next row has homozygous genotype and no block
+            # Check if previous/ next row has homozygous genotype and no block for the child
+            # if yes, en propagate the 
             if prev_index in region.index:
                 child_genotype, child_block = region.loc[prev_index, "Child"].split(":")
                 if child_genotype in ["0/0", "0|0"] and child_block in [".", None]:
@@ -161,7 +176,7 @@ class RbMutationBlock:
 
     def _extract_mutation_config(self, region):
         """
-        Extract the mutation configuration and mutation block ID.
+        Extract the mutation configuration for the child 0/1 or 1/0 and mutation block ID.
 
         Parameters:
         - region (pd.DataFrame): DataFrame containing the region around the mutation.
@@ -169,14 +184,14 @@ class RbMutationBlock:
         Returns:
         - tuple: Mutation configuration and mutation block ID.
         """
-        # Define mutation location
+        # Extract the position of the dnm, then take its index
         _, mut_pos = self.mut_locus
         mut_idx = region.index[region['POS'] == mut_pos]
         
         # Determine mutation configuration based on child's genotype
-        if '0/1' in region.loc[mut_idx, "Child"].values[0]:
+        if '0/1' in region.loc[mut_idx, "Child"].values[0]: # mutation is on c1
             mut_config = 0
-        elif '1/0' in region.loc[mut_idx, "Child"].values[0]:
+        elif '1/0' in region.loc[mut_idx, "Child"].values[0]: # mutation is on c0
             mut_config = 1
             
         # Try to retrieve alternative mutation configuration and block ID   
@@ -189,7 +204,9 @@ class RbMutationBlock:
 
     def _identify_haploblocks(self, region, only_mut=True, longest_individual=None):
         """
-        Identify haploblocks for the trio.
+        Identify haploblocks for the trio. This function does two options.
+        If the flag only_mut is True, the function only returns the genotype and haplotype dataframes that contain only the dnm mutational block.
+        If the flag only_mut is False, the function will return all the genoype and haplotype dataframe that contain all the blocks
 
         Parameters:
         - region (pd.DataFrame): DataFrame containing the region around the mutation.
@@ -200,6 +217,7 @@ class RbMutationBlock:
         Returns:
         - tuple: Processed genotypes and haploblocks DataFrame.
         """
+        
         # Initialize mutation position and split genotypes
         mut_pos = self.mut_locus[1]
         genotypes, haplo_blocks = splitGT(region, mut_pos)
@@ -213,18 +231,14 @@ class RbMutationBlock:
         # Filter genotypes and haploblocks
         genotypes = genotypes[genotypes["POS"].isin(contained_positions)]
         haplo_blocks = haplo_blocks[haplo_blocks["POS"].isin(contained_positions)]
-        
+
         # Make informative genotypes and haploblocks
         genotypes = make_informative_genotypes(genotypes, self.mut_locus[1])
         
-        # Take all the positions in the haploblocks if there exist at least one non NaN value (any=False), otherwise take only the informative haploblocks
+        # Take all the positions in the haploblocks if there exist at least one non NaN value (any=False), 
+        # otherwise take only the informative haploblocks
         any = False if longest_individual is None else True
-        haplo_blocks = make_informative_haplo_blocks(haplo_blocks, genotypes, contained_positions, any=any) # Not to make the haploblocks informative        
-        
-        # # Merge genotypes and haplo_blocks for debugging and final processing
-        # merged_df = pd.merge(genotypes, haplo_blocks, on="POS", suffixes=("_genotype", "_haploblock"))
-        
-
+        haplo_blocks = make_informative_haplo_blocks(haplo_blocks, genotypes, contained_positions, any=any)      
         return genotypes, haplo_blocks
     
     def _find_contained_phase(self, haplo_blocks, longest_individual="Child"):
@@ -243,6 +257,7 @@ class RbMutationBlock:
             block_match = haplo_blocks[longest_individual] == mut_block_id
             match_positions = haplo_blocks[block_match]["POS"].tolist()
             min_pos, max_pos = min(match_positions), max(match_positions)
+        
         else:
             haplo_blocks['POS'] = haplo_blocks['POS'].astype(int)
             min_pos, max_pos = haplo_blocks['POS'].min(), haplo_blocks['POS'].max()
@@ -255,6 +270,8 @@ class RbMutationBlock:
         
         return list(contained)
 
+    
+    # =================================================================================================================================================
     def _perform_phasing(self, mut_block_id, region):
         """
         Perform phasing using different methods.
@@ -263,18 +280,15 @@ class RbMutationBlock:
         - mut_block_id (str): Mutation block ID in the child.
         """
         
-        mut_pos = self.mut_locus[1]
-        # logger.info(f"\n-------Performing phasing for mutation at {self.mut_locus}-------\n")
+        mut_pos = self.mut_locus[1] # extract the position of the dnm
                 
         # Method 1: Phase using DNM haploblock method
+        # -----------------------------------------------------------------------------------------------------
         logger.info("Method 1: Phasing using DNM haploblock method")
         longest_individual, longest_block_id = self._find_longest_block(mut_block_id)
         haplo_blocks_info = self._find_haplo_blocks(mut_block_id)
         phase, confused_phase = self._phase_dnm_block(haplo_blocks_info)
         
-        if confused_phase == True:
-            logger.info("Found confusing phase within the dnm block. Exiting...")
-            return
         if phase is not None:
             self.phase = self._get_explicit_phase(phase)
             self.phase_method = 'DNM Haploblock'
@@ -420,12 +434,15 @@ class RbMutationBlock:
         Returns:
         - int or None: Phase value.
         """
+        
+        logger.info(f"Threshold of error count {max_distance}")
         maternal_distance = distances['maternal']
         paternal_distance = distances['paternal']
-    
+        logger.info(f"maternal distance {maternal_distance}")
+        logger.info(f"paternal distance {paternal_distance}")
         # logger.info(f"Mutation on c0 : {mutation_on_c0}")
         if abs(np.min(maternal_distance) - np.min(paternal_distance)) < min_support:
-            logger.info("Ambiguous phasing due to small difference in distances.")
+            # logger.info("Ambiguous phasing due to small difference in distances.")
             return None
         
         if (min(maternal_distance) < min(paternal_distance)) and (min(maternal_distance) <= max_distance):
@@ -433,7 +450,7 @@ class RbMutationBlock:
         elif (min(maternal_distance) > min(paternal_distance)) and (min(paternal_distance) <= max_distance):
             phase = 1 # match between c0 with paternal parent
         else:
-            logger.info("No reliable phase found due to large distances.")
+            # logger.info("No reliable phase found due to large distances.")
             return None
             
        
@@ -460,7 +477,9 @@ class RbMutationBlock:
         Returns:
         - tuple: Individual identifier and haploblock ID.
         """
-        haplo_blocks = self.haplo_blocks
+        
+        # extract haploblock ID and the dnm position
+        haplo_blocks = self.haplo_blocks # dataframe of the trio that has one haploblock (dnm)
         mut_pos = self.mut_locus[1]
 
         # Get haploblock IDs at the mutation position
@@ -473,14 +492,16 @@ class RbMutationBlock:
         size_block_father = self._get_block_size(haplo_blocks, 'Father', haplo_blk_father)
         size_block_mother = self._get_block_size(haplo_blocks, 'Mother', haplo_blk_mother)
 
-        # Find individual with the largest haploblock
+        # Find individual with the largest haploblock size
         sizes = {
             'Child': size_block_child,
             'Father': size_block_father,
             'Mother': size_block_mother
         }
+        
         longest_individual = max(sizes, key=sizes.get)
         
+        # find the block id of the individual that has the longest block
         longest_block_id = {
             'Child': haplo_blk_child,
             'Father': haplo_blk_father,
@@ -506,13 +527,13 @@ class RbMutationBlock:
 
     def _find_haplo_blocks(self, mut_block_id):
         """
-        Find and create haploblock objects for each individual.
+        Find and create haploblock objects for all individuals within the mut_block_id
 
         Parameters:
         - mut_block_id (str): Mutation block ID in the child.
 
         Returns:
-        - dict: Haploblock information for each individual.
+        - dict: Haploblock information (id, size, start, end, individual id, flag whether the block contains the mutation, the positions within the block, the position of the mutation) for each individual.
         """
         haplo_blocks = self.haplo_blocks_unrestricted
         mut_pos = self.mut_locus[1]
@@ -524,11 +545,15 @@ class RbMutationBlock:
             blocks = []
 
             for block_id in block_ids:
+                logger.info(f"Creating haploblock for {block_id}")
                 block_positions = haplo_blocks[haplo_blocks[individual] == block_id]['POS'].values
                 block_start = block_positions.min()
                 block_end = block_positions.max()
                 block_size = block_end - block_start + 1
-                contains_mutation = (block_id == mut_block_id) or (block_start <= mut_pos <= block_end)
+                logger.info(f"The size of this block is {block_size}")
+                # contains_mutation = (block_id == mut_block_id) or (block_start <= mut_pos <= block_end)
+                contains_mutation = (block_id == mut_block_id) ## Update on 02/05/2025 : some blocks contain this mutation.
+                logger.info(f"This block contains the mutation {contains_mutation}")
                 
                 block_obj = HaplotypeBlock(
                     block_id=block_id,
@@ -561,6 +586,7 @@ class RbMutationBlock:
         child_block = haplo_info['Child']['dnm_block']
         father_block = haplo_info['Father']['dnm_block']
         mother_block = haplo_info['Mother']['dnm_block']
+        
 
         if not all([child_block, father_block, mother_block]):
             logger.info("Mising dnm blocks in one of the 3 individuals")
@@ -571,43 +597,48 @@ class RbMutationBlock:
             father_block.positions, mother_block.positions
         )
         
-        
-        
         ## Display common positions
-        logger.info(f"The positions used for phasing : {sorted(list(common_positions))}")
+        # logger.info(f"The positions used for phasing : {sorted(list(common_positions))}")
+        logger.info(f"Number of positions used : {len(list(common_positions))}")
+        logger.info(f"The dnm block IDs used (child, father, mother) are {child_block.id, father_block.id, mother_block.id}")
 
-        
         if not common_positions:
             logger.info("Empty common positions")
             return None, True
 
         # Filter out the mutation locus
         genotypes = self.genotypes[self.genotypes['POS'] != self.mut_locus[1]]
+        
+        # check if the genotypes is large enough
+        logger.info(f"Current number of positions in the genotypes {len(genotypes)}")
 
         # Keep only positions that are common and have valid genotypes
         valid_genotypes = {'0|1', '1|0', '0|0', '1|1'}
-        
-        genotypes = genotypes[
+        genotypes_valid = genotypes[
             genotypes['POS'].isin(common_positions) &
             genotypes['Mother'].isin(valid_genotypes) &
             genotypes['Father'].isin(valid_genotypes) &
             genotypes['Child'].isin(valid_genotypes)
         ]
-        
+
         ## Mask double heterozygous sites
         double_heterozygotes = {'0|1', '1|0'}
-        genotypes = genotypes[
-            ~(genotypes["Father"].isin(double_heterozygotes) &
-            genotypes["Mother"].isin(double_heterozygotes))
+        genotypes_valid = genotypes_valid[
+            ~(genotypes_valid["Father"].isin(double_heterozygotes) & genotypes_valid["Mother"].isin(double_heterozygotes))
             
         ]
 
-        if genotypes.empty:
+        if genotypes_valid.empty:
+            # # Write out the genotype regardless of the valid positions
+            # with open(f"{self.mut_locus}.txt", "w") as f:
+            #     f.write(str(common_positions))
+            # genotypes[genotypes['POS'].isin(common_positions)].to_csv(f"gthb-{self.mut_locus}.csv", index=False, sep="\t")
+            logger.info(genotypes)
             logger.info("Empty genotypes within the dnm haploblock")
             return None, True
-        
-        # genotypes.to_csv(f"gt-hb-{self.mut_locus}.csv", index=False, sep="\t")
+        # genotypes_valid.to_csv(f"gthb-{self.mut_locus}.csv", index=False, sep="\t")
 
+        
 
         # Extract haplotypes and filter informative genotypes
         columns_to_check = ['Mother', 'Father', 'Child']
@@ -639,10 +670,10 @@ class RbMutationBlock:
         
         logger.info(f"The distances are {distances}")
         
-        if (0 in distances['maternal']) and (0 in distances['paternal']):
+        if ((0 in distances['maternal']) and (0 in distances['paternal'])):
             logger.info(f"Confusing phase found in dnm block. Cannot phase this dnm {self.mut_locus}")
             return None, True
-
+        
         return self._decide_phase(distances, min_support=1, max_distance=int(0.1 * len(common_positions)), mutation_on_c0=mutation_on_c0), False
 
     def _phase_using_longest_haploblock(self, longest_individual, haplo_info):
@@ -801,7 +832,8 @@ class RbMutationBlock:
         positions_father = list(itertools.chain(*[b.positions for b in haplo_blocks_father]))
         positions_mother = list(itertools.chain(*[b.positions for b in haplo_blocks_mother]))
         common_positions = set(positions_child).intersection(positions_father, positions_mother)
-        logger.info(f"The positions used for assigning mutations: {sorted(list(common_positions))}")
+        # logger.info(f"The positions used for assigning mutations: {sorted(list(common_positions))}")
+        logger.info(f"Number of positions used : {len(common_positions)}")
 
         list_blocks_father = [genotypes_unrestricted[genotypes_unrestricted.index.isin(set(haplo_blocks_father[k].positions) & common_positions)]['Father'].str.split('|', expand=True).astype(int).to_numpy() for k in range(len(haplo_blocks_father))]
         list_blocks_mother = [genotypes_unrestricted[genotypes_unrestricted.index.isin(set(haplo_blocks_mother[k].positions) & common_positions)]['Mother'].str.split('|', expand=True).astype(int).to_numpy() for k in range(len(haplo_blocks_mother))]
@@ -828,24 +860,23 @@ class RbMutationBlock:
         logger.info(f"Number of combined blocks in the child is {len(combined_blocks_child)}")
         logger.info(f"Number of combined blocks for the mother is {len(combined_blocks_mother)}")
         logger.info(f"Number of combined blocks for the father is {len(combined_blocks_father)}")
-        print()
-        print("Start to assign mutations")
+
+  
+        logger.info("Start to assign mutations")
         
         for b_c in combined_blocks_child:
             for b_m in combined_blocks_mother:
                 for b_f in combined_blocks_father:
-                    # print("Child: ", b_c)
-                    # print("Mother: ", b_m)
-                    # print("Father: ", b_f)
                     distances = self._calculate_phasing_distances(
                         child_mut_hap=pd.DataFrame(b_c)[0], child_other_hap=pd.DataFrame(b_c)[1],
                         mother_alleles=pd.DataFrame(b_m), father_alleles=pd.DataFrame(b_f)
                     )
                     phase = self._decide_phase(distances, 1, 1, mutation_on_c0)
-                    # all_phases.append(phase if phase is not None else 1000)
                     all_phases.add(phase if phase is not None else 1000)
                     
                     if 0 in all_phases and 1 in all_phases:
+                        logger.info("Found confusing phases in both positions")
+                        logger.info(distances)
                         return None, False
                     else:
                         pass

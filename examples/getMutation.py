@@ -8,17 +8,19 @@ def getMutation(df, idx, individual='Child'):
     """
     Get the genotype and block ID for a mutation in the child from a DataFrame.
 
-    Args:
+    Parameters :
         df (pd.DataFrame): DataFrame containing phase data. 
         idx (int): Index of the mutation in the DataFrame
         
     Returns:
         tuple: A tuple containing the genotype and block ID for the mutation in the child.
     """
+    
+    
     if len(df) < 1:
         return None, None
     
-    # a phased genotype entry in a vcf has two elements split by a colon   
+    # Extract the genotype and the mutation block of the given index and the given individual   
     entry = df.loc[idx, individual].item().split(':')
 
     if len(entry) > 1:
@@ -36,12 +38,23 @@ def getMutation(df, idx, individual='Child'):
     return cfg, block    
 
 
-# Turn each individual's genotypes into an 2-column array of informative sites
 def make_informative_genotypes(genotypes, mut_pos):
-    # Give heterozygotes in parents a phase if it's the only transmittable genotype,
-    # This allows us to phase e.g.,
-    #           Mother    Father    Child
-    #           0/0       0/1         0|1
+    """
+    Turn each individual's genotypes into an 2-column array of informative sites ( meaning 0/0 -> 0|0)
+    Give heterozygotes in parents a phase if it's the only transmittable genotype,
+    This allows us to phase e.g.,
+              Mother    Father    Child
+              0/0       0/1         0|1
+              
+    Parameters :
+    - genotypes : dataframe of genotypes for the trio
+    - mut_pos: position of the dnm
+    
+    Return:
+    - genotypes dataframe but everything was phased    
+   
+    """
+    
 
     for index, row in genotypes.iterrows():
         if (row[['Mother', 'Father']] == '0/1').sum() == 1:
@@ -57,7 +70,6 @@ def make_informative_genotypes(genotypes, mut_pos):
         '1/2': None,
         '2/1': None
         })
-
 
     # Count homozygote genotypes as phase informative, drop unphased heterozygotes
     genotypes = genotypes.dropna()
