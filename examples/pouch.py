@@ -72,7 +72,7 @@ class RbMutationBlock:
         # ---------------------------------------------------------------------------------------------------------------------------------------
         logger.info(f"Step 2: Extract mutational configuration. Check if mutation was on c0 or c1 of the Child.")
         self.mut_config, mut_block_id = self._extract_mutation_config(region)
-        
+        logger.info(f"Mutation configuration {self.mut_config}")
         # If mut_block_id is None, then we cannot phase
         if mut_block_id is None or mut_block_id == "MUT_BLOCK":
             logger.info("Mutation block ID for the Child is None. Exiting import.")
@@ -111,8 +111,8 @@ class RbMutationBlock:
             columns={"Child": "Child_haploblock", 
             "Father": "Father_haploblock", 
             "Mother": "Mother_haploblock"})
-        merged_df = pd.merge(genotypes_unrestricted, haplo_blocks_unrestricted, on="POS", suffixes=("_genotype", "_haploblock"))
-        merged_df.to_csv(f'gthb-{self.mut_locus}.csv')
+        # merged_df = pd.merge(genotypes_unrestricted, haplo_blocks_unrestricted, on="POS", suffixes=("_genotype", "_haploblock"))
+        # merged_df.to_csv(f'gthb-{self.mut_locus}.csv')
         ## -------------------------------------------------------------------
         if genotypes is None or haplo_blocks['Child'].isna().all():
             logger.info(f"Missing haploblocks for {self.mut_locus} for the Child. Exiting import.")
@@ -298,6 +298,7 @@ class RbMutationBlock:
             logger.info(f"Phasing using DNM haploblock unsuccessful.")
 
         # Method 2: Attempt phasing using longest haploblock in parents
+    
         logger.info("Method 2: Attempt phasing using longest haploblock in parents")        
         phase, parentID, parent_haploblock = self._phase_using_longest_haploblock(longest_individual, haplo_blocks_info)
         
@@ -305,6 +306,7 @@ class RbMutationBlock:
             self.phase = self._get_explicit_phase(phase)
             self.phase_method = 'Longest Haploblock Phasing'
             logger.info(f"Found phase: {self.phase} using method: {self.phase_method} for mutation at {self.mut_locus}")
+            logger.info(f"Predicted phase {self.phase}")
             logger.info(f"Parent used for phasing: {parentID} and Haploblock: {parent_haploblock}")
             return
         else:
@@ -465,6 +467,7 @@ class RbMutationBlock:
         # Adjust the phase based on the mutation configuration
         if not mutation_on_c0: # Mutation is on c1
             phase = 1 - phase
+            
         return phase
 
     def _find_longest_block(self, mut_block_id):
@@ -586,7 +589,7 @@ class RbMutationBlock:
         child_block = haplo_info['Child']['dnm_block']
         father_block = haplo_info['Father']['dnm_block']
         mother_block = haplo_info['Mother']['dnm_block']
-        
+        mut_pos = self.mut_locus[1]
 
         if not all([child_block, father_block, mother_block]):
             logger.info("Mising dnm blocks in one of the 3 individuals")
@@ -610,7 +613,7 @@ class RbMutationBlock:
         genotypes = self.genotypes[self.genotypes['POS'] != self.mut_locus[1]]
         
         # check if the genotypes is large enough
-        logger.info(f"Current number of positions in the genotypes {len(genotypes)}")
+        # logger.info(f"Current number of positions in the genotypes {len(genotypes)}")
 
         # Keep only positions that are common and have valid genotypes
         valid_genotypes = {'0|1', '1|0', '0|0', '1|1'}
@@ -625,29 +628,24 @@ class RbMutationBlock:
         double_heterozygotes = {'0|1', '1|0'}
         genotypes_valid = genotypes_valid[
             ~(genotypes_valid["Father"].isin(double_heterozygotes) & genotypes_valid["Mother"].isin(double_heterozygotes))
-            
         ]
 
+        # If after filtering, the genotypes are empty, then just remove it
         if genotypes_valid.empty:
-            # # Write out the genotype regardless of the valid positions
-            # with open(f"{self.mut_locus}.txt", "w") as f:
-            #     f.write(str(common_positions))
-            # genotypes[genotypes['POS'].isin(common_positions)].to_csv(f"gthb-{self.mut_locus}.csv", index=False, sep="\t")
             logger.info(genotypes)
             logger.info("Empty genotypes within the dnm haploblock")
             return None, True
-        # genotypes_valid.to_csv(f"gthb-{self.mut_locus}.csv", index=False, sep="\t")
-
-        
 
         # Extract haplotypes and filter informative genotypes
         columns_to_check = ['Mother', 'Father', 'Child']
-        filtered_genotypes = genotypes.loc[
-            genotypes[columns_to_check].apply(
+        
+        # Filter out positions that are valid
+        filtered_genotypes = genotypes_valid.loc[
+            genotypes_valid[columns_to_check].apply(
                 lambda col: col.str.split('|', expand=True).apply(lambda x: x.isin(['0', '1']).all(), axis=1)
             ).all(axis=1)
         ]
-        
+        # Extract allelles of each parent and child
         mother_alleles = filtered_genotypes['Mother'].str.split('|', expand=True).astype(int)
         father_alleles = filtered_genotypes['Father'].str.split('|', expand=True).astype(int)
         child_alleles = filtered_genotypes['Child'].str.split('|', expand=True).astype(int)
@@ -662,19 +660,55 @@ class RbMutationBlock:
             logger.info("Error in genotyping of the child. Homozygous genotype found.")
             return None, True  # Can't phase if the child is homozygous
 
-        # Determine phase
+        threshold = int(0.1 * len(common_positions)) # Threshold for error
         distances = self._calculate_phasing_distances(
             child_other_hap=child_other_hap, child_mut_hap=child_mut_hap, 
             mother_alleles=mother_alleles, father_alleles=father_alleles
         )
         
-        logger.info(f"The distances are {distances}")
+        min_mother = min(distances['maternal'])
+        min_father = min(distances['paternal'])
         
         if ((0 in distances['maternal']) and (0 in distances['paternal'])):
             logger.info(f"Confusing phase found in dnm block. Cannot phase this dnm {self.mut_locus}")
             return None, True
         
-        return self._decide_phase(distances, min_support=1, max_distance=int(0.1 * len(common_positions)), mutation_on_c0=mutation_on_c0), False
+        ## If the haploblocks contain too many errors:
+        ## ==============================================================================
+        window = self.size // 4  # Decrease window size
+        while (min_mother > threshold) and (min_father > threshold):
+            # Filter the dataframe for rows where the 'POS' column is in the desired range
+            filtered_genotypes = filtered_genotypes[(filtered_genotypes['POS'] >= mut_pos - window) & (filtered_genotypes['POS'] <= mut_pos + 1000)]
+            # Extract allelles of each parent and child
+            mother_alleles = filtered_genotypes['Mother'].str.split('|', expand=True).astype(int)
+            father_alleles = filtered_genotypes['Father'].str.split('|', expand=True).astype(int)
+            child_alleles = filtered_genotypes['Child'].str.split('|', expand=True).astype(int)
+            child_mut_hap, child_other_hap = (child_alleles[0], child_alleles[1]) # if mutation_on_c0 else (child_alleles[1], child_alleles[0])
+            
+            # Check if child haplotypes match parents
+            if (child_other_hap == child_mut_hap).all():
+                logger.info("Error in genotyping of the child. Homozygous genotype found.")
+                return None, True  # Can't phase if the child is homozygous
+            
+            distances = self._calculate_phasing_distances(
+                child_other_hap=child_other_hap, child_mut_hap=child_mut_hap, 
+                mother_alleles=mother_alleles, father_alleles=father_alleles
+            )
+            
+            min_mother = min(distances['maternal'])
+            min_father = min(distances['paternal'])
+            window = window // 2
+            
+            if ((0 in distances['maternal']) and (0 in distances['paternal'])):
+                logger.info(f"Confusing phase found in dnm block. Cannot phase this dnm {self.mut_locus}")
+                return None, True
+            
+            # If we reach to the end of the window, then we exit
+            if window == 0:
+                logger.info(f"Cannot reduce window to smaller. Exiting...")
+                return None, True
+        
+        return self._decide_phase(distances, min_support=1, max_distance=threshold, mutation_on_c0=mutation_on_c0), False
 
     def _phase_using_longest_haploblock(self, longest_individual, haplo_info):
         """
@@ -699,12 +733,24 @@ class RbMutationBlock:
                 phase = self._single_parent_phasing(dnm_child_block, parent_block)
                 if phase is not None:
                     return phase, parent_block.individual, parent_block.id
-        else:
+        else: # If one of the parent has the longest haploblock
             # Get child blocks without mutation and sort by size
             child_blocks = haplo_info['Child']['blocks']
             child_blocks = [b for b in child_blocks if not b.contains_mutation]
             child_blocks.sort(key=lambda x: x.size, reverse=True)
             parent_block = haplo_info[longest_individual]['dnm_block']
+            other_parent = "Father" if longest_individual == "Father" else "Mother"
+            other_parent_block = haplo_info[other_parent]['dnm_block']
+            
+            # Must check if the longest blocks are not identical
+            if (sorted(parent_block.positions) == sorted(other_parent_block.positions)):
+                        parent_block_genotype = self.genotypes[self.genotypes['POS'].isin(parent_block.positions)]
+                        other_parent_block_genotype = self.genotypes[self.genotypes['POS'].isin(other_parent_block.positions)]
+                        # Suppose df1 and df2 are your DataFrames
+                        if parent_block_genotype .reset_index(drop=True).equals(other_parent_block_genotype.reset_index(drop=True)):
+                            logger.info("Parents have identical genotypes in longest block covering dnm position")
+                            logger.info("Exiting...")
+                            return None, None, None
 
             for child_block in child_blocks:
                 phase = self._single_parent_phasing(child_block, parent_block)
@@ -876,7 +922,8 @@ class RbMutationBlock:
                     
                     if 0 in all_phases and 1 in all_phases:
                         logger.info("Found confusing phases in both positions")
-                        logger.info(distances)
+                        logger.info(all_phases)
+                        # logger.info(distances)
                         return None, False
                     else:
                         pass
