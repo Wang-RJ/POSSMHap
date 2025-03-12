@@ -437,12 +437,15 @@ class RbMutationBlock:
         - int or None: Phase value.
         """
         
-        logger.info(f"Threshold of error count {max_distance}")
+        
         maternal_distance = distances['maternal']
         paternal_distance = distances['paternal']
-        logger.info(f"maternal distance {maternal_distance}")
-        logger.info(f"paternal distance {paternal_distance}")
+        
+        # logger.info(f"Threshold of error count {max_distance}")
+        # logger.info(f"maternal distance {maternal_distance}")
+        # logger.info(f"paternal distance {paternal_distance}")
         # logger.info(f"Mutation on c0 : {mutation_on_c0}")
+        
         if abs(np.min(maternal_distance) - np.min(paternal_distance)) < min_support:
             # logger.info("Ambiguous phasing due to small difference in distances.")
             return None
@@ -724,36 +727,48 @@ class RbMutationBlock:
         dnm_child_block = haplo_info['Child']['dnm_block']
         
         if longest_individual == 'Child':
+            logger.info(f"Individiual that has the longest block is {longest_individual}")
             # Get blocks for both parents and sort by size
             parent_blocks = haplo_info['Father']['blocks'] + haplo_info['Mother']['blocks']
             parent_blocks.sort(key=lambda x: x.size, reverse=True)
+        
             
             for parent_block in parent_blocks:
                 logger.debug(f"Phasing using longest block from {parent_block.individual}: {parent_block.id}")
+                other_parent = "Father" if longest_individual == "Mother" else "Father"
+                other_parent_block = haplo_info[other_parent]['dnm_block']                
                 phase = self._single_parent_phasing(dnm_child_block, parent_block)
+                phase_other_parent = self._single_parent_phasing(dnm_child_block, other_parent_block)
                 if phase is not None:
                     return phase, parent_block.individual, parent_block.id
+        
         else: # If one of the parent has the longest haploblock
             # Get child blocks without mutation and sort by size
+            logger.info(f"Individiual that has the longest block is {longest_individual}")
+            
+            # Extract haploblocks in the child
             child_blocks = haplo_info['Child']['blocks']
-            child_blocks = [b for b in child_blocks if not b.contains_mutation]
-            child_blocks.sort(key=lambda x: x.size, reverse=True)
+            child_blocks = [b for b in child_blocks if not b.contains_mutation] # Find all the blocks that do not contain mutation
+            child_blocks.sort(key=lambda x: x.size, reverse=True) # Sort them
+            
+            # Extract haploblocks from parents
             parent_block = haplo_info[longest_individual]['dnm_block']
-            other_parent = "Father" if longest_individual == "Father" else "Mother"
+            other_parent = "Mother" if longest_individual == "Father" else "Father"
             other_parent_block = haplo_info[other_parent]['dnm_block']
             
             # Must check if the longest blocks are not identical
             if (sorted(parent_block.positions) == sorted(other_parent_block.positions)):
-                        parent_block_genotype = self.genotypes[self.genotypes['POS'].isin(parent_block.positions)]
-                        other_parent_block_genotype = self.genotypes[self.genotypes['POS'].isin(other_parent_block.positions)]
-                        # Suppose df1 and df2 are your DataFrames
-                        if parent_block_genotype .reset_index(drop=True).equals(other_parent_block_genotype.reset_index(drop=True)):
-                            logger.info("Parents have identical genotypes in longest block covering dnm position")
-                            logger.info("Exiting...")
-                            return None, None, None
-
+                    parent_block_genotype = self.genotypes[self.genotypes['POS'].isin(parent_block.positions)]
+                    other_parent_block_genotype = self.genotypes[self.genotypes['POS'].isin(other_parent_block.positions)]
+                    # Suppose df1 and df2 are your DataFrames
+                    if parent_block_genotype.reset_index(drop=True).equals(other_parent_block_genotype.reset_index(drop=True)):
+                        logger.info("Parents have identical genotypes in longest block covering dnm position")
+                        logger.info("Exiting...")
+                        return None, None, None
+            # Fix single parent phasing:
             for child_block in child_blocks:
                 phase = self._single_parent_phasing(child_block, parent_block)
+                
                 if phase is not None:
                     return phase, parent_block.individual, parent_block.id
         return None, None, None
@@ -774,24 +789,33 @@ class RbMutationBlock:
             logger.info("Empty common positions")
             return None
 
+        # Extract the genotypes for the selected positions
         genotypes = self.genotypes[self.genotypes['POS'].isin(common_positions)]
-        child_alleles = genotypes['Child'].str.split('|', expand=True).astype(int)
-        parent_alleles = genotypes[parent_block.individual].str.split('|', expand=True).astype(int)
-
-        # Determine which haplotype carries the mutation
-        mutation_on_c0 = (self.mut_config == 1)
-        child_mut_hap, child_other_hap = child_alleles[0], child_alleles[1]
-
-        if (child_other_hap == child_mut_hap).all():
-            return None  # Cannot phase if the child is homozygous
         
-        # Calculate Hamming distances
-        phase = self._calculate_single_parent_phasing_distances(
-            child_mut_hap=child_mut_hap, child_other_hap=child_other_hap,
-            parent_alleles=parent_alleles, mutation_on_c0=mutation_on_c0, 
-            parent_id=parent_block.individual, common_positions = common_positions
-        ) 
-        return phase
+        # Drop the de novo positions from the genotype dataframe
+        genotypes = genotypes[genotypes["POS"] != self.mut_locus[1]]
+        
+        # If we have at least some genotype information in the blocks contained within
+        # the longest parent block
+        
+        if len(genotypes) > 0:
+            child_alleles = genotypes['Child'].str.split('|', expand=True).astype(int)
+            parent_alleles = genotypes[parent_block.individual].str.split('|', expand=True).astype(int)
+
+            # Determine which haplotype carries the mutation
+            mutation_on_c0 = (self.mut_config == 1)
+            child_mut_hap, child_other_hap = child_alleles[0], child_alleles[1]
+
+            if (child_other_hap == child_mut_hap).all():
+                return None  # Cannot phase if there is no variant other than the de novo within the block
+            
+            # Calculate Hamming distances
+            phase = self._calculate_single_parent_phasing_distances(
+                child_mut_hap=child_mut_hap, child_other_hap=child_other_hap,
+                parent_alleles=parent_alleles, mutation_on_c0=mutation_on_c0, 
+                parent_id=parent_block.individual, common_positions = common_positions
+            ) 
+            return phase
     
     def _calculate_single_parent_phasing_distances(self, child_mut_hap, child_other_hap, parent_alleles, parent_id, mutation_on_c0, common_positions):
         """
@@ -811,36 +835,55 @@ class RbMutationBlock:
         def hamming_distance(x, y):
             return np.sum(x != y)
         
+        # Matrix of genotype matching
+        #     parent1|parent2|
+        #     ________________ 
+        # co  |      |      |
+        # c1  |      |      |
         configurations = {
             'c0_from_parent': [hamming_distance(child_mut_hap, parent_alleles[0]), hamming_distance(child_mut_hap, parent_alleles[1])],
             'c1_from_parent': [hamming_distance(child_other_hap, parent_alleles[0]), hamming_distance(child_other_hap, parent_alleles[1])]
         }
         
-        logger.debug(f"Configurations from parent {parent_id} are: ", configurations)
+        # logger.info(f"Number of positions used for this calculation {len(child_mut_hap)}")
+        # logger.info(f"Configurations from parent {parent_id} are: {configurations}")
+        # logger.info(f"The positions used are {common_positions}")
         
         # If no perfect match return None
-        if min(configurations['c0_from_parent']) > 0  and sum(configurations['c1_from_parent']) > 0:
+        if min(configurations['c0_from_parent']) > 0  and min(configurations['c1_from_parent']) > 0:
             return 
         
-        # If there is two perfect matches
+        # If there is two perfect matches in my current parent
+        # Proceed to the other parent
         if min(configurations['c0_from_parent']) == 0  and min(configurations['c1_from_parent']) == 0:  # When the parent we're looking at can give both haplotypes to the child's haplotypes
+            # logger.info("We have two perfect haplotype match using this parent. Will proceed to compare to the other parent")
             
             # Check if the other parent is homozygous. If it is the case, then we can infer the haplotype of the child (even without the haploblock associated with the other parent)
             other_parent = "Mother" if parent_id == "Father" else "Father"
             gt_otherparent = self.genotypes[self.genotypes["POS"].isin(common_positions)][other_parent]
+            other_parent_alleles = gt_otherparent.str.split('|', expand=True).astype(int)
             
-            # Assign the haplotype to the other parent if they are homozyous
-            otherparent_hap = np.zeros(len(common_positions)) if list(gt_otherparent.unique()) in [["0/0"], ["0|0"]] else np.ones(len(common_positions))
-                
-            if hamming_distance(child_mut_hap, otherparent_hap) == 0:
-                config_code = 1 if hamming_distance(child_other_hap, parent_alleles[0]) == 0 else 0
-            elif hamming_distance(child_other_hap, otherparent_hap) == 0:
-                config_code = 0 if hamming_distance(child_mut_hap, parent_alleles[0]) == 0 else 1
-            else:
-                logger.info("Not assignable from this block of other parent {otherparent_hap} at pos: {common_pos}")
+            # Calculate the Hamming distance for the other parent
+            configurations_other = {
+            'c0_from_otherparent': [hamming_distance(child_mut_hap, other_parent_alleles[0]), hamming_distance(child_mut_hap, other_parent_alleles[1])],
+            'c1_from_otherparent': [hamming_distance(child_other_hap, other_parent_alleles[0]), hamming_distance(child_other_hap, other_parent_alleles[1])]
+            }
+            
+            # Now check the haplotype matching between the child and the other parents
+            # If there is no perfect match, return None
+            if min(configurations_other['c0_from_otherparent']) > 0 and min(configurations_other['c1_from_otherparent']) > 0:
+                return 
+            
+            # If there are two perfect matches
+            if min(configurations_other['c0_from_otherparent']) == min(configurations_other['c1_from_otherparent']) == 0:
+                logger.info("Both parents have the same haplotypes within this range. Cannot assign.")
                 return
-
-
+            elif min(configurations_other['c0_from_otherparent']) == 0 and min(configurations_other['c1_from_otherparent']) > 0:
+                config_code = 0
+            elif min(configurations_other['c0_from_otherparent']) > 0 and min(configurations_other['c1_from_otherparent']) == 0:
+                config_code = 1
+            else:
+                return
         # If we can have an uniquely identifiable happlotype
         elif min(configurations['c0_from_parent']) == 0 and min(configurations['c1_from_parent']) > 0:
             config_code = 0
@@ -901,7 +944,7 @@ class RbMutationBlock:
             stop_combine = True
             return None, stop_combine
 
-        all_phases = set()
+        all_phases = {0:0, 1:0, 1000:0} # dictionary of phases
         logger.info("Done generating combined blocks for each individuals, preparing to generate combinations....")
         logger.info(f"Number of combined blocks in the child is {len(combined_blocks_child)}")
         logger.info(f"Number of combined blocks for the mother is {len(combined_blocks_mother)}")
@@ -918,22 +961,44 @@ class RbMutationBlock:
                         mother_alleles=pd.DataFrame(b_m), father_alleles=pd.DataFrame(b_f)
                     )
                     phase = self._decide_phase(distances, 1, 1, mutation_on_c0)
-                    all_phases.add(phase if phase is not None else 1000)
                     
-                    if 0 in all_phases and 1 in all_phases:
-                        logger.info("Found confusing phases in both positions")
-                        logger.info(all_phases)
-                        # logger.info(distances)
-                        return None, False
-                    else:
-                        pass
-                
-            
+                    # update dictionary of all_phases
+                    if phase is None : 
+                        all_phases[1000] += 1
+                    elif phase == 0:
+                        all_phases[0] += 1
+                    elif phase == 1:
+                        all_phases[1] += 1
+
+                    # if (all_phases.get(1) > 1) and  (all_phases.get(0) > 1):
+                    #     logger.info("Found confusing phases in both positions")
+                    #     logger.info(all_phases)
+                    #     if (all_phases.get(1) // all_phases.get(0)) >= 3:
+                    #         return 1, False
+                    #     elif (all_phases.get(0) // all_phases.get(1)) >= 3:
+                    #         return 0, False
+                    #     # logger.info(distances)
+                    #     else :
+                    #         return None, False
+                    # else:
+                        # pass
+        
+        
+        # Final decisions
         logger.info(f"All possible phases {all_phases}")
-        if 1 not in all_phases and 0 in all_phases:
-            return 0, False
-        elif 0 not in all_phases and 1 in all_phases:
-            return 1, False
+        
+        # Assign phases
+        if (all_phases.get(0) == 0):
+            if (all_phases.get(1) >= 1):
+                return 1, False
+        if (all_phases.get(1) == 0):
+            if all_phases.get(0) >= 1:
+                return 0, False
+        elif (all_phases.get(0) >= 1 and all_phases.get(1) >= 1):
+            if (all_phases.get(1) // all_phases.get(0)) >= 9:
+                return 1, False
+            elif (all_phases.get(0) // all_phases.get(1)) >= 9:
+                return 0, False        
         # Default return value
         return None, False
            
